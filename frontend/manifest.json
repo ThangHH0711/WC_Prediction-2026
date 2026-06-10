@@ -1,0 +1,22 @@
+{
+  "name": "Dự đoán World Cup 2026",
+  "short_name": "WC 2026",
+  "description": "Website chương trình dự đoán tỉ số World Cup 2026 cho 20 người chơi.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#090d16",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

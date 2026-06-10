@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dự Đoán World Cup 2026</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#090d16">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- HEADER -->
+        <header>
+            <div class="logo-container">
+                <img src="https://storage.livescore.com/images/competition/high/world-cup-ls-logo.png" alt="World Cup 2026 Logo">
+                <h1>DỰ ĐOÁN WC 2026</h1>
+            </div>
+            <div class="nav-links" id="desktop-nav">
+                <button class="nav-btn active" data-target="leaderboard">🏆 Xếp hạng</button>
+                <button class="nav-btn" data-target="predict">⚽ Dự đoán</button>
+                <button class="nav-btn" data-target="matrix">📊 Ma trận</button>
+                <button class="nav-btn" data-target="admin" id="nav-admin-btn" style="display: none;">⚙️ Admin</button>
+                <button class="nav-btn" data-target="config" id="nav-config-btn">🔑 Cấu hình</button>
+            </div>
+        </header>
+
+        <!-- USER BAR -->
+        <div class="user-bar" id="user-bar" style="display: none;">
+            <div class="user-info">
+                <span>Xin chào, <strong id="logged-in-name">...</strong></span>
+                <span class="role-badge" id="logged-in-role">player</span>
+                <button class="btn-change-pwd" id="btn-user-change-pwd" style="background: transparent; border: none; color: var(--accent-gold); font-size: 0.8rem; cursor: pointer; text-decoration: underline; margin-left: 12px;">🔑 Đổi mật khẩu</button>
+            </div>
+            <button class="logout-btn" id="logout-btn">Đăng xuất</button>
+        </div>
+
+        <!-- MAIN VIEW INTERFACES -->
+
+        <!-- 1. LOGIN VIEW -->
+        <div id="view-login" class="view-panel active">
+            <div class="login-view glass-card">
+                <div class="login-header">
+                    <h2>ĐĂNG NHẬP</h2>
+                    <p>Chọn tên của bạn và nhập mật khẩu mặc định (123456) để tham gia dự đoán</p>
+                </div>
+                <div id="config-warning" class="error-msg" style="display: block; color: var(--accent-gold); margin-bottom: 20px;">
+                    ⚠️ Bạn cần cấu hình kết nối Supabase trước khi đăng nhập! Click nút "Cấu hình" hoặc link dưới.
+                </div>
+                <button type="button" class="btn-secondary" id="btn-demo-mode" style="margin-bottom: 20px; border-color: var(--accent-green); color: var(--accent-green); width: 100%; font-weight: bold;">
+                    ⚡ TRẢI NGHIỆM THỬ (CHẠY DEMO OFFLINE)
+                </button>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="login-user-select">Tên Người Chơi</label>
+                        <select id="login-user-select" required>
+                            <option value="">-- Chọn tên người chơi --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Mật khẩu</label>
+                        <input type="password" id="login-password" placeholder="Nhập mật khẩu (Mặc định: 123456)" required>
+                    </div>
+                    <button type="submit" class="submit-btn" id="login-submit-btn" disabled>ĐĂNG NHẬP</button>
+                    <div class="error-msg" id="login-error-msg">Mật khẩu không chính xác!</div>
+                </form>
+                <div class="config-prompt" id="prompt-config-link">Cấu hình kết nối cơ sở dữ liệu Supabase</div>
+            </div>
+        </div>
+
+        <!-- 2. LEADERBOARD VIEW -->
+        <div id="view-leaderboard" class="view-panel">
+            <div class="glass-card">
+                <h2 style="margin-bottom: 8px;">🏆 BẢNG XẾP HẠNG TỔNG</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                    Cập nhật tự động. Cách tính: Đúng tỷ số (Nhận % Quỹ thưởng), Sai xu thế & Sai tỷ số (Tính điểm phạt cộng dồn).
+                </p>
+                <div style="overflow-x: auto;">
+                    <table class="leaderboard-table">
+                        <thead>
+                            <tr>
+                                <th class="rank-col">Hạng</th>
+                                <th>Người chơi</th>
+                                <th style="text-align: center;">Trận đoán</th>
+                                <th style="text-align: center;">Đúng tỷ số</th>
+                                <th style="text-align: center;">Điểm Vòng bảng</th>
+                                <th style="text-align: right;">Điểm Knockout</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body">
+                            <!-- Populated dynamically -->
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Đang tải bảng xếp hạng...</td></tr>
+                        </tbody>
+                        <tfoot id="leaderboard-foot">
+                            <!-- Populated dynamically -->
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. PREDICT VIEW (MATCHES) -->
+        <div id="view-predict" class="view-panel">
+            <div class="stage-navigation" style="margin-bottom: 20px; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px;">
+                <!-- Stage filter tabs populated dynamically -->
+            </div>
+            
+            <!-- STAGE RULE BANNER -->
+            <div id="stage-rule-banner" class="stage-rule-banner" style="margin-bottom: 20px; display: none;">
+                <!-- Populated dynamically based on active tab -->
+            </div>
+            
+            <div id="matches-container">
+                <!-- Matches populated dynamically -->
+                <div class="glass-card" style="text-align: center; color: var(--text-muted);">Đang tải lịch thi đấu...</div>
+            </div>
+        </div>
+
+        <!-- 4. MATRIX VIEW -->
+        <div id="view-matrix" class="view-panel">
+            <div class="glass-card">
+                <h2 style="margin-bottom: 8px;">📊 MA TRẬN DỰ ĐOÁN CHI TIẾT</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                    Xem chi tiết tỷ số dự đoán và điểm số của tất cả thành viên cho từng trận đấu.
+                </p>
+                <div class="matrix-container">
+                    <table class="matrix-table" id="matrix-table">
+                        <!-- Populated dynamically -->
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. CONFIG VIEW -->
+        <div id="view-config" class="view-panel">
+            <div class="glass-card" style="max-width: 500px; margin: 0 auto;">
+                <h2 style="margin-bottom: 12px; color: var(--accent-gold);">🔑 CẤU HÌNH SUPABASE</h2>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 20px;">
+                    Để chạy serverless miễn phí, bạn cần tạo dự án Supabase, chạy file SQL Schema và nhập thông tin kết nối dưới đây:
+                </p>
+                <form id="config-form">
+                    <div class="form-group">
+                        <label for="config-url">Supabase Project URL</label>
+                        <input type="url" id="config-url" placeholder="https://xxxx.supabase.co" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="config-key">Supabase Anon Public API Key</label>
+                        <input type="password" id="config-key" placeholder="eyJhbGciOi..." required>
+                    </div>
+                    <div class="config-btn-group">
+                        <button type="button" class="btn-secondary" id="config-clear-btn">Xóa cấu hình</button>
+                        <button type="submit" class="submit-btn" style="flex: 2;">LƯU CẤU HÌNH</button>
+                    </div>
+                    <div id="config-success-msg" style="color: var(--accent-green); margin-top: 12px; display: none; font-weight: 600;">
+                        ✓ Lưu cấu hình thành công! Đang tải lại...
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 6. ADMIN VIEW -->
+        <div id="view-admin" class="view-panel">
+            <div class="glass-card admin-card">
+                <h3>⚙️ QUẢN TRỊ VIÊN - CẬP NHẬT KẾT QUẢ TRẬN ĐẤU</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                    Cập nhật kết quả thi đấu thủ công. Khi trạng thái được chuyển sang <strong>FT</strong>, hệ thống cơ sở dữ liệu sẽ tự động tính toán điểm số phạt và điểm chia thưởng.
+                </p>
+                <div class="form-group" style="max-width: 300px;">
+                    <label for="admin-stage-select">Lọc Vòng Đấu</label>
+                    <select id="admin-stage-select">
+                        <option value="Vòng bảng">Vòng bảng</option>
+                        <option value="Vòng 1/16">Vòng 1/16 (R32)</option>
+                        <option value="Vòng 1/8">Vòng 1/8 (R16)</option>
+                        <option value="Tứ kết">Tứ kết</option>
+                        <option value="Bán kết">Bán kết</option>
+                        <option value="Tranh hạng 3">Tranh hạng 3</option>
+                        <option value="Chung kết">Chung kết</option>
+                    </select>
+                </div>
+                <div id="admin-matches-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+
+            <!-- CHAMPION UPDATE CARD -->
+            <div class="glass-card admin-card" id="admin-champion-card">
+                <h3>🏆 CẬP NHẬT ĐỘI VÔ ĐỊCH GIẢI ĐẤU</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 16px;">
+                    Chọn nhà vô địch chính thức của World Cup 2026. Điểm số cược của các thành viên sẽ tự động tính toán (chia đều 50% tổng quỹ cược cho những người đoán đúng).
+                </p>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <div class="form-group" style="margin-bottom: 0; min-width: 240px; flex: 1;">
+                        <select id="admin-champion-select" style="width: 100%;">
+                            <option value="">-- Chọn đội vô địch --</option>
+                        </select>
+                    </div>
+                    <button type="button" class="submit-btn" id="admin-save-champion-btn" style="max-width: 160px; height: 42px; margin-top: 0;">Cập nhật</button>
+                </div>
+                <div id="admin-champion-msg" style="color: var(--accent-green); margin-top: 12px; display: none; font-weight: 600;">
+                    ✓ Cập nhật nhà vô địch thành công!
+                </div>
+            </div>
+
+            <div class="glass-card admin-card">
+                <h3>➕ THÊM THÀNH VIÊN MỚI</h3>
+                <form id="admin-add-user-form">
+                    <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="admin-add-user-name">Họ và tên</label>
+                            <input type="text" id="admin-add-user-name" placeholder="Ví dụ: Nguyễn Văn A" required>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="admin-add-user-email">Email đăng nhập</label>
+                            <input type="email" id="admin-add-user-email" placeholder="Ví dụ: player15@wc2026.com" required>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="admin-add-user-password">Mật khẩu (Mặc định: 123456)</label>
+                            <input type="password" id="admin-add-user-password" value="123456" required>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 200px;">
+                            <label for="admin-add-user-role">Quyền hạn</label>
+                            <select id="admin-add-user-role">
+                                <option value="player">Người chơi (Player)</option>
+                                <option value="admin">Quản trị viên (Admin)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="submit-btn" style="max-width: 200px;">Thêm thành viên</button>
+                    <div id="admin-add-user-msg" style="color: var(--accent-green); margin-top: 12px; display: none; font-weight: 600;">
+                        ✓ Thêm thành viên thành công!
+                    </div>
+                    <div id="admin-add-user-error" style="color: var(--accent-red); margin-top: 12px; display: none; font-weight: 600;">
+                        Lỗi: Email đã tồn tại!
+                    </div>
+                </form>
+            </div>
+
+            <div class="glass-card admin-card">
+                <h3>👥 QUẢN LÝ THÀNH VIÊN (SỬA/XÓA)</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label for="admin-user-select">Chọn người chơi</label>
+                        <select id="admin-user-select">
+                            <option value="">-- Chọn thành viên --</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex: 1; min-width: 200px;">
+                        <label for="admin-new-password">Mật khẩu mới</label>
+                        <input type="password" id="admin-new-password" placeholder="Mật khẩu mới cho người chơi">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
+                    <button type="button" class="submit-btn" id="admin-change-pass-btn" style="max-width: 200px; margin-top: 0;">Đặt lại mật khẩu</button>
+                    <button type="button" class="submit-btn" id="admin-delete-user-btn" style="max-width: 200px; margin-top: 0; background: linear-gradient(135deg, var(--accent-red), hsl(350, 84%, 38%)); color: white; box-shadow: none;">Xóa thành viên</button>
+                </div>
+                <div id="admin-user-msg" style="color: var(--accent-green); margin-top: 12px; display: none; font-weight: 600;">
+                    ✓ Cập nhật mật khẩu thành công!
+                </div>
+                <div id="admin-user-error" style="color: var(--accent-red); margin-top: 12px; display: none; font-weight: 600;">
+                    Lỗi thao tác!
+                </div>
+            </div>
+        </div>
+
+    </div> <!-- /app-container -->
+
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <div class="mobile-nav" id="mobile-nav">
+        <button class="mobile-nav-item active" data-target="leaderboard">
+            <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33 1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82 1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            <span>Bảng xếp hạng</span>
+        </button>
+        <button class="mobile-nav-item" data-target="predict">
+            <svg viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/><path d="M2 12h20"/></svg>
+            <span>Dự đoán</span>
+        </button>
+        <button class="mobile-nav-item" data-target="matrix">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7-4.8 4.8"/></svg>
+            <span>Ma trận</span>
+        </button>
+        <button class="mobile-nav-item" data-target="config">
+            <svg viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span>Cấu hình</span>
+        </button>
+    </div>
+
+    <!-- MODAL FOR DISPLAYING OTHER USERS' PREDICTIONS -->
+    <div class="modal-overlay" id="predictions-modal">
+        <div class="modal-content">
+            <button class="modal-close" id="modal-close-btn">&times;</button>
+            <h3 class="modal-title" id="modal-match-title">Tỉ số dự đoán của các thành viên</h3>
+            <div class="predictions-list-modal" id="modal-predictions-list">
+                <!-- Populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FOR FORCED OR MANUAL PASSWORD CHANGE -->
+    <div class="modal-overlay" id="password-change-modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <button class="modal-close" id="pwd-modal-close-btn" style="display: none;">&times;</button>
+            <h3 class="modal-title" id="pwd-modal-title">🔑 Đổi mật khẩu bảo mật</h3>
+            <p id="pwd-modal-desc" style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+                Nhập mật khẩu mới của bạn bên dưới:
+            </p>
+            <form id="user-change-pwd-form">
+                <div class="form-group">
+                    <label for="user-new-pwd">Mật khẩu mới</label>
+                    <input type="password" id="user-new-pwd" placeholder="Nhập mật khẩu mới" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-confirm-pwd">Xác nhận mật khẩu mới</label>
+                    <input type="password" id="user-confirm-pwd" placeholder="Xác nhận mật khẩu mới" required>
+                </div>
+                <button type="submit" class="submit-btn">Cập nhật mật khẩu</button>
+                <div id="pwd-change-error" style="color: var(--accent-red); margin-top: 12px; display: none; font-weight: 600; font-size: 0.85rem;">
+                    Mật khẩu không khớp!
+                </div>
+                <div id="pwd-change-success" style="color: var(--accent-green); margin-top: 12px; display: none; font-weight: 600; font-size: 0.85rem;">
+                    ✓ Đổi mật khẩu thành công!
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SDKs -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Application Scripts -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

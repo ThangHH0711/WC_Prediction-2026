@@ -1,0 +1,15 @@
+1. Tính điểm
+- Vòng bảng: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 5 điểm/1 trận, sai tỷ số mất 2 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 15 điểm/1 trận.
+- Vòng 1/16: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 10 điểm/1 trận, sai tỷ số mất 4 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 20 điểm/1 trận (Chỉ tính 2 hiệp chính).
+- Tứ kết: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 15 điểm/1 trận, sai tỷ số mất 6 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 30 điểm/1 trận (Chỉ tính 2 hiệp chính).
+- Bán kết: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 20 điểm/1 trận, sai tỷ số mất 8 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 50 điểm/1 trận (Chỉ tính 2 hiệp chính).
+- Tranh hạng 3: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 30 điểm, sai tỷ số mất 12 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 70 điểm/1 trận (Chỉ tính 2 hiệp chính).
+- Chung kết: Dự đoán đúng tỷ số trận đấu được thưởng 40% tổng điểm thu được/số người dự đoán đúng, sai xu thế mất 30 điểm, sai tỷ số mất 12 điểm/1 bàn chênh lệch. Nếu không dự đoán mất 70 điểm/1 trận (Chỉ tính 2 hiệp chính).
+- Chỉ tính kết quả trong 90 phút thi đấu chính thức.
+2. Đặt cược đội vô địch
+- Mỗi user được đặt cược đội vô địch sau khi vòng bảng kết thúc và trước khi trận đấu đầu tiên của vòng 1/16 hay R32 khởi tranh.
+- Số điểm đặt cược của mỗi user là -50đ.
+- Người đoán đúng đội vô địch sẽ được 50% tổng điểm/tổng số người đoán đúng.
+3. Bảng điểm
+- Giai đoạn vòng bảng: 1 cột.
+- Giai đoạn từ R32 đến chung kết: 1 cột (bao gồm cả -50 điểm phí đoán đội vô địch)
