@@ -81,8 +81,17 @@ BEGIN
         RETURN;
     END IF;
     
-    -- Only calculate if match is finished (status = 'FT') and scores are entered
-    IF r_match.status <> 'FT' OR r_match.score_a IS NULL OR r_match.score_b IS NULL THEN
+    -- If match is SCHEDULED or scores are NULL, reset all prediction points to 0
+    IF r_match.status = 'SCHEDULED' OR r_match.score_a IS NULL OR r_match.score_b IS NULL THEN
+        -- Delete system-inserted penalty rows (where predictions were never made)
+        DELETE FROM public.predictions 
+        WHERE match_id = match_id_in AND predict_a IS NULL AND predict_b IS NULL;
+        
+        -- Reset normal predictions points to 0
+        UPDATE public.predictions 
+        SET points = 0, updated_at = now() 
+        WHERE match_id = match_id_in;
+        
         RETURN;
     END IF;
     
@@ -189,9 +198,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION public.trg_on_match_result_update()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- If status changes to 'FT' or scores are updated
-    IF (OLD.status <> 'FT' AND NEW.status = 'FT') OR 
-       (NEW.status = 'FT' AND (OLD.score_a IS DISTINCT FROM NEW.score_a OR OLD.score_b IS DISTINCT FROM NEW.score_b)) THEN
+    -- Trigger calculation if status changes or if score_a/score_b is updated
+    IF (OLD.status IS DISTINCT FROM NEW.status OR OLD.score_a IS DISTINCT FROM NEW.score_a OR OLD.score_b IS DISTINCT FROM NEW.score_b) THEN
         PERFORM public.calculate_match_points(NEW.id);
     END IF;
     RETURN NEW;
