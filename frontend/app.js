@@ -622,11 +622,8 @@ function renderPredict() {
             scoreDisplay = `<span class="time">${timeFmt.timeStr}</span><span class="time">${timeFmt.dateStr}</span>`;
         }
         
-        // Locked match details / "View other predictions" button
-        let viewOthersBtn = '';
-        if (isLocked) {
-            viewOthersBtn = `<button class="btn-view-predictions" data-match-id="${m.id}" data-match-title="${m.team_a} vs ${m.team_b}">👥 Xem dự đoán của mọi người</button>`;
-        }
+        // Show "View other predictions" button for all matches at all times
+        let viewOthersBtn = `<button class="btn-view-predictions" data-match-id="${m.id}" data-match-title="${m.team_a} vs ${m.team_b}">👥 Xem dự đoán của mọi người</button>`;
         
         // Render prediction form/details
         let predictionContent = '';
