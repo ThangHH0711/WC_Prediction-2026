@@ -1,10 +1,8 @@
 import os
-import re
-import json
 import requests
 import sys
 
-# Team name mapping from Livescore names to database names
+# Team name mapping from API names to our database names
 TEAM_MAP = {
     "South Korea": "Korea Republic",
     "Cote d'Ivoire": "Côte d'Ivoire",
@@ -12,7 +10,8 @@ TEAM_MAP = {
     "Congo DR": "DR Congo",
     "USA": "United States",
     "Cabo Verde": "Cape Verde",
-    "Czech Republic": "Czechia"
+    "Czech Republic": "Czechia",
+    "Czechia": "Czechia"
 }
 
 def normalize_team(name):
@@ -21,106 +20,67 @@ def normalize_team(name):
     name_strip = name.strip()
     return TEAM_MAP.get(name_strip, name_strip)
 
-def fetch_livescore_matches():
-    urls = [
-        'https://www.livescore.com/en/football/international/world-cup-2026/',
-        'https://www.livescore.com/en/football/international/world-cup-2026/fixtures/',
-        'https://www.livescore.com/en/football/international/world-cup-2026/results/'
-    ]
-    
+def fetch_football_data_matches(api_token):
+    url = "https://api.football-data.org/v4/competitions/WC/matches"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.0.0 Safari/537.36'
+        "X-Auth-Token": api_token
     }
     
-    matches_found = []
-    seen_keys = set()
-    
-    for url in urls:
-        try:
-            print(f"Scraping Livescore page: {url}")
-            res = requests.get(url, headers=headers, timeout=10)
-            if res.status_code != 200:
-                print(f"Failed to fetch {url}: Status {res.status_code}")
-                continue
+    try:
+        print(f"Fetching matches from Football-Data.org API...")
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code != 200:
+            print(f"Failed to fetch matches: Status {res.status_code}. Response: {res.text}")
+            return []
             
-            # Find __NEXT_DATA__
-            match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', res.text, re.DOTALL)
-            if not match:
-                print("Could not find __NEXT_DATA__ script tag.")
+        data = res.json()
+        matches_found = []
+        
+        for m in data.get("matches", []):
+            home_team = m.get("homeTeam", {})
+            away_team = m.get("awayTeam", {})
+            
+            home_name = home_team.get("name")
+            away_name = away_team.get("name")
+            
+            if not home_name or not away_name:
                 continue
                 
-            data = json.loads(match.group(1))
-            props = data.get('props') or {}
-            page_props = props.get('pageProps') or {}
-            initial_data = page_props.get('initialData') or {}
-            sections = initial_data.get('sections') or []
+            home_norm = normalize_team(home_name)
+            away_norm = normalize_team(away_name)
             
-            for sec in sections:
-                if not sec:
-                    continue
-                events = sec.get('events') or []
-                for ev in events:
-                    if not ev:
-                        continue
-                    home = ev.get('homeTeamName')
-                    away = ev.get('awayTeamName')
-                    
-                    if not home or not away:
-                        continue
-                        
-                    home_norm = normalize_team(home)
-                    away_norm = normalize_team(away)
-                    
-                    # Status
-                    status_raw = ev.get('eventStatus') # 'UPCOMING', 'FT', 'IN_PLAY' etc.
-                    
-                    # Score after 90 mins (Full Time score)
-                    home_score_raw = ev.get('homeFullTimeScore')
-                    away_score_raw = ev.get('awayFullTimeScore')
-                    
-                    # If FT and FullTimeScore is empty, fallback to homeTeamScore
-                    if status_raw == 'FT':
-                        if home_score_raw == '' or home_score_raw is None:
-                            home_score_raw = ev.get('homeTeamScore')
-                        if away_score_raw == '' or away_score_raw is None:
-                            away_score_raw = ev.get('awayTeamScore')
-                            
-                    # Parse scores as integers if available
-                    home_score = None
-                    away_score = None
-                    try:
-                        if home_score_raw is not None and home_score_raw != '':
-                            home_score = int(home_score_raw)
-                        if away_score_raw is not None and away_score_raw != '':
-                            away_score = int(away_score_raw)
-                    except ValueError:
-                        pass
-                        
-                    # Map Livescore status to database status
-                    db_status = 'SCHEDULED'
-                    if status_raw == 'FT':
-                        db_status = 'FT'
-                    elif status_raw in ['IN_PLAY', 'HT', 'LIVE']:
-                        db_status = 'LIVE'
-                        
-                    key = (home_norm, away_norm)
-                    if key not in seen_keys:
-                        seen_keys.add(key)
-                        matches_found.append({
-                            'home': home_norm,
-                            'away': away_norm,
-                            'score_a': home_score,
-                            'score_b': away_score,
-                            'status': db_status
-                        })
-                        
-        except Exception as e:
-            print(f"Error scraping {url}: {e}")
+            # Match status mapping
+            # API statuses: 'TIMED', 'SCHEDULED', 'LIVE', 'IN_PLAY', 'PAUSED', 'FINISHED', 'POSTPONED', 'SUSPENDED', 'CANCELLED'
+            api_status = m.get("status")
+            db_status = "SCHEDULED"
+            if api_status in ["FINISHED"]:
+                db_status = "FT"
+            elif api_status in ["LIVE", "IN_PLAY", "PAUSED"]:
+                db_status = "LIVE"
+                
+            # Score
+            score_data = m.get("score", {})
+            full_time = score_data.get("fullTime", {})
             
-    return matches_found
+            score_a = full_time.get("home")
+            score_b = full_time.get("away")
+            
+            matches_found.append({
+                "home": home_norm,
+                "away": away_norm,
+                "score_a": score_a,
+                "score_b": score_b,
+                "status": db_status
+            })
+            
+        return matches_found
+        
+    except Exception as e:
+        print(f"Error calling Football-Data.org API: {e}")
+        return []
 
 def get_db_matches(supabase_url, supabase_key):
-    url = f"{supabase_url}/rest/v1/matches?select=id,team_a,team_b,status"
+    url = f"{supabase_url}/rest/v1/matches?select=id,team_a,team_b,status,score_a,score_b"
     headers = {
         "apikey": supabase_key,
         "Authorization": f"Bearer {supabase_key}"
@@ -148,7 +108,6 @@ def update_db_match(supabase_url, supabase_key, match_id, score_a, score_b, stat
         "status": status
     }
     
-    # PostgREST patch request
     res = requests.patch(url, headers=headers, json=body)
     if res.status_code in [200, 204]:
         print(f"Successfully updated match {match_id}: {score_a} - {score_b} ({status})")
@@ -161,17 +120,15 @@ def main():
     # Read environment variables for Supabase
     supabase_url = os.environ.get("SUPABASE_URL")
     supabase_key = os.environ.get("SUPABASE_KEY")
+    api_token = os.environ.get("FOOTBALL_DATA_TOKEN")
     
     if not supabase_url or not supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY environment variables must be set.")
-        print("Scraper will run in mock/test mode.")
-        # Mock run
-        ls_matches = fetch_livescore_matches()
-        print(f"Mock run complete. Found {len(ls_matches)} matches in Livescore.")
-        if ls_matches:
-            print("First 3 matched events:")
-            for m in ls_matches[:3]:
-                print(f"  {m['home']} vs {m['away']} | Score: {m['score_a']}-{m['score_b']} | Status: {m['status']}")
+        return
+        
+    if not api_token:
+        print("Error: FOOTBALL_DATA_TOKEN environment variable must be set.")
+        print("Please register a free API token at: https://www.football-data.org/client/register")
         return
         
     print("Fetching active matches from database...")
@@ -180,52 +137,50 @@ def main():
         print("No matches returned from database. Check schema and seed data.")
         return
         
-    print("Scraping match data from Livescore...")
-    ls_matches = fetch_livescore_matches()
-    print(f"Found {len(ls_matches)} matches from Livescore.")
+    print("Fetching match data from Football-Data.org...")
+    api_matches = fetch_football_data_matches(api_token)
+    print(f"Found {len(api_matches)} matches from API.")
     
     # Match and update
     updates_count = 0
-    for ls_m in ls_matches:
-        # Search for this match in database matches
-        # Note: sometimes teams could be flipped in DB or Livescore, so we check both combinations
+    for api_m in api_matches:
         matched_db = None
         for db_m in db_matches:
             db_team_a = normalize_team(db_m['team_a'])
             db_team_b = normalize_team(db_m['team_b'])
             
-            if (db_team_a == ls_m['home'] and db_team_b == ls_m['away']) or \
-               (db_team_a == ls_m['away'] and db_team_b == ls_m['home']):
+            # Match teams (checking both combinations in case they are flipped)
+            if (db_team_a == api_m['home'] and db_team_b == api_m['away']) or \
+               (db_team_a == api_m['away'] and db_team_b == api_m['home']):
                 matched_db = db_m
                 break
                 
         if matched_db:
             match_id = matched_db['id']
             db_status = matched_db['status']
+            db_score_a = matched_db.get('score_a')
+            db_score_b = matched_db.get('score_b')
             
-            # Check if there is an update
-            # We update if:
-            # 1. Status is different (e.g. SCHEDULED -> LIVE or LIVE -> FT)
-            # 2. Scores are updated
+            score_a = api_m['score_a']
+            score_b = api_m['score_b']
+            
+            # Flip scores if team order is flipped in DB relative to API
+            if normalize_team(matched_db['team_a']) == api_m['away']:
+                score_a = api_m['score_b']
+                score_b = api_m['score_a']
+                
             is_updated = False
             
-            # Handle score team flipping
-            score_a = ls_m['score_a']
-            score_b = ls_m['score_b']
-            # If teams are flipped in Livescore relative to DB, we flip the scores
-            if normalize_team(matched_db['team_a']) == ls_m['away']:
-                score_a = ls_m['score_b']
-                score_b = ls_m['score_a']
-                
-            if db_status != ls_m['status']:
+            # Check if there are changes in status or scores
+            if db_status != api_m['status']:
                 is_updated = True
             elif score_a is not None and score_b is not None:
-                # If match is FT or LIVE, and scores are present
-                is_updated = True
-                
-            if is_updated and ls_m['status'] != 'SCHEDULED':
+                if db_score_a != score_a or db_score_b != score_b:
+                    is_updated = True
+                    
+            if is_updated and api_m['status'] != 'SCHEDULED':
                 # Update match in Supabase
-                success = update_db_match(supabase_url, supabase_key, match_id, score_a, score_b, ls_m['status'])
+                success = update_db_match(supabase_url, supabase_key, match_id, score_a, score_b, api_m['status'])
                 if success:
                     updates_count += 1
                     
