@@ -811,37 +811,38 @@ async function renderMatrix() {
             const pred = allPredictions.find(pr => pr.player_id === p.id && pr.match_id === m.id);
             
             let cellContent = '';
-            if (isLocked) {
-                // Show prediction since match is locked
-                if (pred && pred.predict_a !== null) {
-                    let ptsDisplay = '';
-                    if (m.status === 'FT') {
-                        const pts = parseFloat(pred.points);
-                        ptsDisplay = `<div class="matrix-cell-pts ${pts >= 0 ? 'win' : 'loss'}">${pts >= 0 ? '+' : ''}${pts}đ</div>`;
-                    }
-                    cellContent = `
-                        <div class="matrix-cell-score">${pred.predict_a}-${pred.predict_b}</div>
-                        ${ptsDisplay}
-                    `;
-                } else {
-                    let ptsDisplay = '';
-                    if (m.status === 'FT') {
-                        const pts = parseFloat(pred ? pred.points : 0);
-                        ptsDisplay = `<div class="matrix-cell-pts loss">${pts}đ</div>`;
-                    }
-                    cellContent = `
-                        <div class="matrix-cell-score" style="color: var(--accent-red);">Không đoán</div>
-                        ${ptsDisplay}
-                    `;
+            // Display prediction of all players immediately (public at all times)
+            if (pred && pred.predict_a !== null && pred.predict_a !== undefined) {
+                let ptsDisplay = '';
+                if (m.status === 'FT') {
+                    const pts = parseFloat(pred.points);
+                    ptsDisplay = `<div class="matrix-cell-pts ${pts >= 0 ? 'win' : 'loss'}">${pts >= 0 ? '+' : ''}${pts}đ</div>`;
                 }
+                
+                // Highlight own prediction in light blue
+                let scoreStyle = '';
+                if (currentUser && p.id === currentUser.id) {
+                    scoreStyle = 'style="color: var(--accent-blue); font-weight: bold;"';
+                }
+                
+                cellContent = `
+                    <div class="matrix-cell-score" ${scoreStyle}>${pred.predict_a}-${pred.predict_b}</div>
+                    ${ptsDisplay}
+                `;
             } else {
-                // Match is not locked yet
-                if (currentUser && p.id === currentUser.id && pred && pred.predict_a !== null) {
-                    // Show only own prediction
-                    cellContent = `<div class="matrix-cell-score" style="color: var(--accent-blue);">${pred.predict_a}-${pred.predict_b}</div>`;
-                } else {
-                    cellContent = '<span style="color: var(--text-muted);">Ẩn 🔒</span>';
+                let ptsDisplay = '';
+                if (m.status === 'FT') {
+                    const pts = parseFloat(pred ? pred.points : 0);
+                    ptsDisplay = `<div class="matrix-cell-pts loss">${pts}đ</div>`;
                 }
+                
+                let noPredText = m.status === 'FT' ? 'Không đoán' : 'Chưa đoán';
+                let noPredStyle = m.status === 'FT' ? 'style="color: var(--accent-red);"' : 'style="color: var(--text-muted);"';
+                
+                cellContent = `
+                    <div class="matrix-cell-score" ${noPredStyle}>${noPredText}</div>
+                    ${ptsDisplay}
+                `;
             }
             
             trHtml.push(`<td>${cellContent}</td>`);
@@ -884,36 +885,24 @@ async function renderMatrix() {
         const pred = champPredsList.find(pr => pr.player_id === p.id);
         
         let cellContent = '';
-        if (isChampLocked) {
-            if (pred && pred.predicted_team) {
-                const pts = parseFloat(pred.points);
-                let ptsDisplay = '';
-                const hasWinnerDeclared = actualChampText !== 'Chưa có' && actualChampText !== '';
-                if (hasWinnerDeclared) {
-                    ptsDisplay = `<div class="matrix-cell-pts ${pts > 0 ? 'win' : 'loss'}">${pts > 0 ? '+' : ''}${pts}đ</div>`;
-                } else {
-                    ptsDisplay = `<div class="matrix-cell-pts loss" style="background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-50đ</div>`;
-                }
-                cellContent = `
-                    <div class="matrix-cell-score" style="color: var(--accent-gold); font-weight: bold; font-size: 0.85rem;">${pred.predicted_team}</div>
-                    ${ptsDisplay}
-                `;
+        if (pred && pred.predicted_team) {
+            const pts = parseFloat(pred.points);
+            let ptsDisplay = '';
+            const hasWinnerDeclared = actualChampText !== 'Chưa có' && actualChampText !== '';
+            if (hasWinnerDeclared) {
+                ptsDisplay = `<div class="matrix-cell-pts ${pts > 0 ? 'win' : 'loss'}">${pts > 0 ? '+' : ''}${pts}đ</div>`;
             } else {
-                cellContent = `
-                    <div class="matrix-cell-score" style="color: var(--text-muted); font-size: 0.85rem;">Không cược</div>
-                    <div class="matrix-cell-pts loss">0đ</div>
-                `;
+                ptsDisplay = `<div class="matrix-cell-pts loss" style="background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-50đ</div>`;
             }
+            cellContent = `
+                <div class="matrix-cell-score" style="color: var(--accent-gold); font-weight: bold; font-size: 0.85rem;">${pred.predicted_team}</div>
+                ${ptsDisplay}
+            `;
         } else {
-            // Before lock
-            if (currentUser && p.id === currentUser.id && pred && pred.predicted_team) {
-                cellContent = `
-                    <div class="matrix-cell-score" style="color: var(--accent-gold); font-weight: bold; font-size: 0.85rem;">${pred.predicted_team}</div>
-                    <div class="matrix-cell-pts loss" style="background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-50đ</div>
-                `;
-            } else {
-                cellContent = '<span style="color: var(--text-muted);">Ẩn 🔒</span>';
-            }
+            cellContent = `
+                <div class="matrix-cell-score" style="color: var(--text-muted); font-size: 0.85rem;">Chưa cược</div>
+                <div class="matrix-cell-pts loss">0đ</div>
+            `;
         }
         champHtml.push(`<td style="border-top: 2px solid rgba(234, 179, 8, 0.2);">${cellContent}</td>`);
     });
