@@ -209,14 +209,32 @@ RETURNS TRIGGER AS $$
 DECLARE
     v_kickoff TIMESTAMP WITH TIME ZONE;
     v_lock_time TIMESTAMP WITH TIME ZONE;
+    v_should_check BOOLEAN := FALSE;
 BEGIN
-    SELECT kickoff INTO v_kickoff FROM public.matches WHERE id = NEW.match_id;
-    
-    -- Lock time is 15 minutes before kickoff
-    v_lock_time := v_kickoff - INTERVAL '15 minutes';
-    
-    IF now() > v_lock_time THEN
-        RAISE EXCEPTION 'Trận đấu đã khóa dự đoán (15 phút trước giờ bóng lăn)!';
+    -- Only check prediction lock when:
+    -- 1. UPDATE: The predicted scores are being modified.
+    --    (Allows system/admin to update the points column or updated_at after kickoff)
+    IF (TG_OP = 'UPDATE') THEN
+        IF (OLD.predict_a IS DISTINCT FROM NEW.predict_a OR OLD.predict_b IS DISTINCT FROM NEW.predict_b) THEN
+            v_should_check := TRUE;
+        END IF;
+    -- 2. INSERT: A non-null score is inserted.
+    --    (Allows system/trigger to insert null prediction penalty rows after kickoff)
+    ELSIF (TG_OP = 'INSERT') THEN
+        IF (NEW.predict_a IS NOT NULL OR NEW.predict_b IS NOT NULL) THEN
+            v_should_check := TRUE;
+        END IF;
+    END IF;
+
+    IF v_should_check THEN
+        SELECT kickoff INTO v_kickoff FROM public.matches WHERE id = NEW.match_id;
+        
+        -- Lock time is 15 minutes before kickoff
+        v_lock_time := v_kickoff - INTERVAL '15 minutes';
+        
+        IF now() > v_lock_time THEN
+            RAISE EXCEPTION 'Trận đấu đã khóa dự đoán (15 phút trước giờ bóng lăn)!';
+        END IF;
     END IF;
     
     RETURN NEW;
@@ -244,3 +262,23 @@ LEFT JOIN public.predictions pr ON p.id = pr.player_id
 LEFT JOIN public.matches m ON pr.match_id = m.id
 LEFT JOIN public.champion_predictions cp ON p.id = cp.player_id
 GROUP BY p.id, p.name;
+
+-- 7. Enable RLS and add public access policies (to prevent Supabase from blocking reads/writes)
+ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow read for anyone" ON public.players;
+DROP POLICY IF EXISTS "Allow all operations for anyone" ON public.players;
+CREATE POLICY "Allow read for anyone" ON public.players FOR SELECT USING (true);
+CREATE POLICY "Allow all operations for anyone" ON public.players FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow read for anyone" ON public.matches;
+DROP POLICY IF EXISTS "Allow all operations for anyone" ON public.matches;
+CREATE POLICY "Allow read for anyone" ON public.matches FOR SELECT USING (true);
+CREATE POLICY "Allow all operations for anyone" ON public.matches FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.predictions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow read for anyone" ON public.predictions;
+DROP POLICY IF EXISTS "Allow all operations for anyone" ON public.predictions;
+CREATE POLICY "Allow read for anyone" ON public.predictions FOR SELECT USING (true);
+CREATE POLICY "Allow all operations for anyone" ON public.predictions FOR ALL USING (true) WITH CHECK (true);
+
