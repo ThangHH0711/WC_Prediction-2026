@@ -49,14 +49,12 @@ def fetch_football_data_matches(api_token):
             home_norm = normalize_team(home_name)
             away_norm = normalize_team(away_name)
             
-            # Match status mapping
-            # API statuses: 'TIMED', 'SCHEDULED', 'LIVE', 'IN_PLAY', 'PAUSED', 'FINISHED', 'POSTPONED', 'SUSPENDED', 'CANCELLED'
+            # Match status mapping - Only process finished matches
             api_status = m.get("status")
-            db_status = "SCHEDULED"
-            if api_status in ["FINISHED"]:
-                db_status = "FT"
-            elif api_status in ["LIVE", "IN_PLAY", "PAUSED"]:
-                db_status = "LIVE"
+            if api_status != "FINISHED":
+                continue # Skip matches that are not finished
+                
+            db_status = "FT"
                 
             # Score
             score_data = m.get("score", {})
