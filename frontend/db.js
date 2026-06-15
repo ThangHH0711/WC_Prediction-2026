@@ -134,6 +134,19 @@ export async function fetchPlayers() {
 // Add a new player
 export async function addPlayer(name, email, role, password) {
     const hash = await hashPassword(password);
+    
+    // Find the score of the last person on the leaderboard
+    let lastPlaceScore = 0;
+    try {
+        const board = await fetchLeaderboard();
+        if (board && board.length > 0) {
+            // board is already sorted descending by total_points
+            lastPlaceScore = board[board.length - 1].total_points;
+        }
+    } catch (err) {
+        console.error('Error fetching leaderboard for starting points:', err);
+    }
+
     if (isDemoMode()) {
         const custom = JSON.parse(localStorage.getItem('WC_MOCK_CUSTOM_PLAYERS') || '[]');
         
@@ -147,7 +160,8 @@ export async function addPlayer(name, email, role, password) {
             id: `cp-${Date.now()}`,
             name: name.trim(),
             email: email.trim().toLowerCase(),
-            role: role
+            role: role,
+            starting_points: lastPlaceScore
         };
         
         custom.push(newPlayer);
@@ -169,7 +183,8 @@ export async function addPlayer(name, email, role, password) {
             name: name.trim(),
             email: email.trim().toLowerCase(),
             password_hash: hash,
-            role: role
+            role: role,
+            starting_points: lastPlaceScore
         })
         .select()
         .single();
@@ -490,9 +505,11 @@ export async function fetchLeaderboard() {
         const board = players.map(p => {
             const pPreds = preds.filter(pr => pr.player_id === p.id);
             
-            let groupPoints = 0;
+            const startPts = parseFloat(p.starting_points || 0);
+            
+            let groupPoints = startPts;
             let knockoutPoints = 0;
-            let total = 0;
+            let total = startPts;
             let predicted = 0;
             let exact = 0;
             let bonus = 0;

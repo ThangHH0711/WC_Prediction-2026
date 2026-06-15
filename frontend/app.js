@@ -227,6 +227,7 @@ function setupUserSession() {
     const nameEl = document.getElementById('logged-in-name');
     const roleEl = document.getElementById('logged-in-role');
     const adminBtn = document.getElementById('nav-admin-btn');
+    const mobileAdminBtn = document.getElementById('mobile-nav-admin-btn');
     
     if (currentUser) {
         userBar.style.display = 'flex';
@@ -236,12 +237,15 @@ function setupUserSession() {
         
         if (currentUser.role === 'admin') {
             adminBtn.style.display = 'inline-block';
+            if (mobileAdminBtn) mobileAdminBtn.style.display = 'flex';
         } else {
             adminBtn.style.display = 'none';
+            if (mobileAdminBtn) mobileAdminBtn.style.display = 'none';
         }
     } else {
         userBar.style.display = 'none';
         adminBtn.style.display = 'none';
+        if (mobileAdminBtn) mobileAdminBtn.style.display = 'none';
     }
 }
 
@@ -351,7 +355,7 @@ async function renderLeaderboard() {
         foot.innerHTML = `
             <tr>
                 <td></td>
-                <td style="color: var(--accent-gold);">Tổng cộng (14 người chơi)</td>
+                <td style="color: var(--accent-gold);">Tổng cộng (${board.length} người chơi)</td>
                 <td></td>
                 <td></td>
                 <td style="text-align: center; ${totalGroup < 0 ? 'color: var(--accent-red);' : 'color: var(--accent-green);'}">${Math.round(totalGroup * 10) / 10}</td>
