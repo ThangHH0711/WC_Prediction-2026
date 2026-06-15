@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS public.players (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL, -- SHA-256 hash of password
     role TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player', 'admin')),
+    starting_points NUMERIC NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -259,9 +260,9 @@ CREATE OR REPLACE VIEW public.leaderboard AS
 SELECT 
     p.id AS player_id,
     p.name AS player_name,
-    COALESCE(SUM(CASE WHEN m.stage = 'Vòng bảng' THEN pr.points ELSE 0 END), 0) AS group_points,
+    (COALESCE(SUM(CASE WHEN m.stage = 'Vòng bảng' THEN pr.points ELSE 0 END), 0) + p.starting_points) AS group_points,
     (COALESCE(SUM(CASE WHEN m.stage <> 'Vòng bảng' THEN pr.points ELSE 0 END), 0) + COALESCE(MAX(cp.points), 0)) AS knockout_points,
-    (COALESCE(SUM(pr.points), 0) + COALESCE(MAX(cp.points), 0)) AS total_points,
+    (COALESCE(SUM(pr.points), 0) + COALESCE(MAX(cp.points), 0) + p.starting_points) AS total_points,
     COUNT(pr.match_id) FILTER (WHERE pr.predict_a IS NOT NULL) AS matches_predicted,
     COUNT(pr.match_id) FILTER (WHERE pr.points > 0) AS exact_matches,
     (COALESCE(SUM(CASE WHEN pr.points > 0 THEN pr.points ELSE 0 END), 0) + COALESCE(MAX(CASE WHEN cp.points > 0 THEN cp.points ELSE 0 END), 0)) AS total_bonus
@@ -269,7 +270,7 @@ FROM public.players p
 LEFT JOIN public.predictions pr ON p.id = pr.player_id
 LEFT JOIN public.matches m ON pr.match_id = m.id
 LEFT JOIN public.champion_predictions cp ON p.id = cp.player_id
-GROUP BY p.id, p.name;
+GROUP BY p.id, p.name, p.starting_points;
 
 -- 7. Enable RLS and add public access policies (to prevent Supabase from blocking reads/writes)
 ALTER TABLE public.players ENABLE ROW LEVEL SECURITY;
