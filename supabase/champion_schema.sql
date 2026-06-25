@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS public.champion_predictions (
     player_id UUID PRIMARY KEY REFERENCES public.players(id) ON DELETE CASCADE,
     predicted_team TEXT NOT NULL,
-    points NUMERIC NOT NULL DEFAULT -50, -- -50 represents the bet value placed
+    points NUMERIC NOT NULL DEFAULT -100, -- -100 represents the bet value placed
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -22,14 +22,14 @@ DECLARE
     v_kickoff TIMESTAMP WITH TIME ZONE;
     v_lock_time TIMESTAMP WITH TIME ZONE;
 BEGIN
-    -- Fetch kickoff time of Match 73 (first match of Vòng 1/16)
-    SELECT kickoff INTO v_kickoff FROM public.matches WHERE id = 73;
+    -- Fetch kickoff time of Match 89 (first match of Vòng 1/8)
+    SELECT kickoff INTO v_kickoff FROM public.matches WHERE id = 89;
     
     -- Lock time is 15 minutes before kickoff
     v_lock_time := v_kickoff - INTERVAL '15 minutes';
     
     IF now() > v_lock_time THEN
-        RAISE EXCEPTION 'Dự đoán nhà vô địch đã khóa (15 phút trước khi vòng 1/16 bắt đầu)!';
+        RAISE EXCEPTION 'Dự đoán nhà vô địch đã khóa (15 phút trước khi vòng 1/8 bắt đầu)!';
     END IF;
     
     RETURN NEW;
@@ -50,18 +50,18 @@ DECLARE
     total_pool NUMERIC;
     bonus_points NUMERIC;
 BEGIN
-    -- Count players who placed a champion prediction (each bets 50 pts)
+    -- Count players who placed a champion prediction (each bets 100 pts)
     SELECT COUNT(*) INTO total_players_bet FROM public.champion_predictions WHERE predicted_team IS NOT NULL;
     
     -- Calculate total pool
-    total_pool := total_players_bet * 50;
+    total_pool := total_players_bet * 100;
     
     -- Count correct predictors
     SELECT COUNT(*) INTO correct_count FROM public.champion_predictions WHERE predicted_team = winning_team_in;
     
-    -- First, default all players with predictions to -50 (wrong prediction)
+    -- First, default all players with predictions to -100 (wrong prediction)
     UPDATE public.champion_predictions 
-    SET points = -50
+    SET points = -100
     WHERE predicted_team IS NOT NULL;
     
     -- If there are correct predictors, distribute 50% of the pool
@@ -75,11 +75,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Stored Procedure to clear champion result (resets to -50)
+-- Stored Procedure to clear champion result (resets to -100)
 CREATE OR REPLACE FUNCTION public.clear_champion_result()
 RETURNS VOID AS $$
 BEGIN
-    UPDATE public.champion_predictions SET points = -50;
+    UPDATE public.champion_predictions SET points = -100;
 END;
 $$ LANGUAGE plpgsql;
 
