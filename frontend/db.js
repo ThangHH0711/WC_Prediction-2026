@@ -745,8 +745,7 @@ export async function updateChampionResult(winningTeam) {
         localStorage.setItem('WC_MOCK_CHAMPION_WINNER', winningTeam);
         
         const preds = JSON.parse(localStorage.getItem('WC_MOCK_CHAMPION_PREDICTIONS') || '[]');
-        const totalPlayersBet = preds.filter(p => p.predicted_team).length;
-        const totalPool = totalPlayersBet * 100;
+        const totalPool = preds.length * 100;
         
         const correctCount = preds.filter(p => p.predicted_team === winningTeam).length;
         const bonus = correctCount > 0 ? Math.round(((totalPool * 0.5) / correctCount) * 10) / 10 : 0;
@@ -754,10 +753,8 @@ export async function updateChampionResult(winningTeam) {
         preds.forEach(p => {
             if (p.predicted_team === winningTeam) {
                 p.points = bonus;
-            } else if (p.predicted_team) {
-                p.points = -100;
             } else {
-                p.points = 0;
+                p.points = -100;
             }
         });
         localStorage.setItem('WC_MOCK_CHAMPION_PREDICTIONS', JSON.stringify(preds));

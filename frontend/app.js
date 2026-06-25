@@ -902,7 +902,7 @@ async function renderMatrix() {
         } else {
             cellContent = `
                 <div class="matrix-cell-score" style="color: var(--text-muted); font-size: 0.85rem;">Chưa cược</div>
-                <div class="matrix-cell-pts loss">0đ</div>
+                <div class="matrix-cell-pts loss">-100đ</div>
             `;
         }
         champHtml.push(`<td style="border-top: 2px solid rgba(234, 179, 8, 0.2);">${cellContent}</td>`);
