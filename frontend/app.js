@@ -330,19 +330,64 @@ async function renderLeaderboard() {
                 const grid = document.createElement('div');
                 grid.className = 'awards-grid';
                 
+                // Split archives into champion history and record history
+                const champArchives = (awards.archives || []).filter(item => item.label.includes('Vô địch'));
+                const recordArchives = (awards.archives || []).filter(item => item.label.includes('Kỷ lục'));
+
+                // Build Champion History HTML
+                let champHistoryHtml = '';
+                if (champArchives.length > 0) {
+                    champHistoryHtml = '<div class="award-history">';
+                    champArchives.forEach(item => {
+                        const displayLabel = item.label.replace('Vô địch ', '');
+                        champHistoryHtml += `
+                            <div class="award-history-item" title="${item.label}: ${item.name} (${item.detail})">
+                                <span class="award-history-label">${displayLabel}:</span>
+                                <span class="award-history-val">${item.name} (${item.detail})</span>
+                            </div>
+                        `;
+                    });
+                    champHistoryHtml += '</div>';
+                }
+
+                // Build Record History HTML
+                let recordHistoryHtml = '';
+                if (recordArchives.length > 0) {
+                    recordHistoryHtml = '<div class="award-history">';
+                    recordArchives.forEach(item => {
+                        const displayLabel = item.label.replace('Kỷ lục ', '');
+                        const valOnly = item.detail.split(' ')[0]; // Extract just the point part, e.g., "+47.2đ"
+                        recordHistoryHtml += `
+                            <div class="award-history-item" title="${item.label}: ${item.name} (${item.detail})">
+                                <span class="award-history-label">${displayLabel}:</span>
+                                <span class="award-history-val">${item.name} (${valOnly})</span>
+                            </div>
+                        `;
+                    });
+                    recordHistoryHtml += '</div>';
+                }
+
                 // Card 1: Leader (Resets on Knockout stage)
-                let leaderHtml = '';
-                if (awards.leader) {
+                const leaderHtml = awards.leader ? (() => {
                     const leaderTitle = awards.leader.stage === 'Knockout' ? 'Vô Địch Knockout' : 'Vô Địch Vòng Bảng';
-                    leaderHtml = `
+                    return `
                         <div class="award-card gold">
                             <div class="award-icon">👑</div>
                             <div class="award-title">${leaderTitle}</div>
                             <div class="award-winner" title="${awards.leader.name}">${awards.leader.name}</div>
                             <div class="award-detail">${awards.leader.points}đ</div>
+                            ${champHistoryHtml}
                         </div>
                     `;
-                }
+                })() : `
+                    <div class="award-card gold">
+                        <div class="award-icon">👑</div>
+                        <div class="award-title">Vô Địch Vòng Bảng</div>
+                        <div class="award-winner">Chưa có</div>
+                        <div class="award-detail">0đ</div>
+                        ${champHistoryHtml}
+                    </div>
+                `;
 
                 // Card 2: Most Exact
                 const exactHtml = awards.mostExact ? `
@@ -352,7 +397,14 @@ async function renderLeaderboard() {
                         <div class="award-winner" title="${awards.mostExact.name}">${awards.mostExact.name}</div>
                         <div class="award-detail">Đúng ${awards.mostExact.value} trận</div>
                     </div>
-                ` : '';
+                ` : `
+                    <div class="award-card orange">
+                        <div class="award-icon">🎯</div>
+                        <div class="award-title">Vua Dự Đoán</div>
+                        <div class="award-winner">Chưa có</div>
+                        <div class="award-detail">Đúng 0 trận</div>
+                    </div>
+                `;
 
                 // Card 3: Highest Single Match (Resets after each round)
                 const recordHtml = awards.highestSingle ? `
@@ -364,8 +416,17 @@ async function renderLeaderboard() {
                         <div style="font-size: 0.65rem; color: var(--text-muted); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin-top: 2px;" title="${awards.highestSingle.match}">
                             ${awards.highestSingle.match}
                         </div>
+                        ${recordHistoryHtml}
                     </div>
-                ` : '';
+                ` : `
+                    <div class="award-card cyan">
+                        <div class="award-icon">⚡</div>
+                        <div class="award-title">Kỷ Lục ${awards.currentRound}</div>
+                        <div class="award-winner">Chưa có</div>
+                        <div class="award-detail">--</div>
+                        ${recordHistoryHtml}
+                    </div>
+                `;
 
                 // Card 4: Most Dedicated (Cống Hiến Nhất - Bottom of Leaderboard)
                 const dedicatedHtml = awards.mostDedicated ? `
@@ -375,7 +436,14 @@ async function renderLeaderboard() {
                         <div class="award-winner" title="${awards.mostDedicated.name}">${awards.mostDedicated.name}</div>
                         <div class="award-detail">${awards.mostDedicated.value}đ</div>
                     </div>
-                ` : '';
+                ` : `
+                    <div class="award-card magenta">
+                        <div class="award-icon">🩹</div>
+                        <div class="award-title">Cống Hiến Nhất</div>
+                        <div class="award-winner">Chưa có</div>
+                        <div class="award-detail">0đ</div>
+                    </div>
+                `;
 
                 grid.innerHTML = `${leaderHtml}${exactHtml}${recordHtml}${dedicatedHtml}`;
                 hofContainer.appendChild(grid);

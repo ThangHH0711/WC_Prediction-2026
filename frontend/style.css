@@ -1022,3 +1022,40 @@ header {
     font-weight: 600;
 }
 
+/* Nested History inside Award Cards */
+.award-history {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    width: 100%;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.award-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+}
+
+.award-history-label {
+    opacity: 0.85;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.award-history-val {
+    font-weight: 600;
+    color: var(--accent-gold);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 110px;
+}
+
