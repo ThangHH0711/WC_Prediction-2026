@@ -501,6 +501,8 @@ export async function fetchLeaderboard() {
         const matches = await fetchMatches();
         
         const players = await fetchPlayers();
+        const match85 = matches.find(m => m.id === 85);
+        const isKnockoutActivated = match85 && match85.status === 'FT';
         
         const board = players.map(p => {
             const pPreds = preds.filter(pr => pr.player_id === p.id);
@@ -509,7 +511,6 @@ export async function fetchLeaderboard() {
             
             let groupPoints = startPts;
             let knockoutPoints = 0;
-            let total = startPts;
             let predicted = 0;
             let exact = 0;
             let bonus = 0;
@@ -517,11 +518,10 @@ export async function fetchLeaderboard() {
             pPreds.forEach(pr => {
                 const matchVal = matches.find(m => m.id === pr.match_id);
                 const pts = parseFloat(pr.points || 0);
-                total += pts;
                 
                 if (matchVal && matchVal.stage === 'Vòng bảng') {
                     groupPoints += pts;
-                } else {
+                } else if (isKnockoutActivated) {
                     knockoutPoints += pts;
                 }
                 
@@ -536,14 +536,15 @@ export async function fetchLeaderboard() {
             
             // Add champion prediction points
             const cPred = champPreds.find(cp => cp.player_id === p.id);
-            if (cPred && cPred.predicted_team) {
+            if (isKnockoutActivated && cPred && cPred.predicted_team) {
                 const pts = parseFloat(cPred.points || 0);
-                total += pts;
                 knockoutPoints += pts;
                 if (pts > 0) {
                     bonus += pts;
                 }
             }
+            
+            const total = groupPoints + knockoutPoints;
             
             return {
                 player_id: p.id,
@@ -583,29 +584,36 @@ export async function fetchSpecialAwards(matches) {
     
     // Helper to format multiple names cleanly
     function formatMultipleNames(namesArray) {
-        if (namesArray.length === 0) return 'Chưa có';
+        if (!namesArray || namesArray.length === 0) return 'Chưa có';
         if (namesArray.length <= 2) return namesArray.join(', ');
         return `${namesArray.slice(0, 2).join(', ')}... (+${namesArray.length - 2})`;
     }
 
     // Determine current active round of the tournament
     const stagesOrder = ['Vòng bảng', 'Vòng 1/16', 'Vòng 1/8', 'Tứ kết', 'Bán kết', 'Tranh hạng 3', 'Chung kết'];
-    let currentRound = 'Vòng bảng';
-    let maxStageIndex = 0;
     
-    matches.forEach(m => {
-        if (m.status === 'FT' || m.status === 'LIVE') {
-            const idx = stagesOrder.indexOf(m.stage);
-            if (idx > maxStageIndex) {
-                maxStageIndex = idx;
-                currentRound = m.stage;
-            }
+    // Determine completed stages
+    const completedStages = [];
+    stagesOrder.forEach(stage => {
+        const stageMatches = matches.filter(m => m.stage === stage);
+        if (stageMatches.length > 0 && stageMatches.every(m => m.status === 'FT')) {
+            completedStages.push(stage);
         }
     });
 
-    // Check if knockout stage has started (Match 89 or Match 73 kickoff)
-    const match73 = matches.find(m => m.id === 73);
-    const isKnockoutStarted = match73 && (match73.status === 'FT' || match73.status === 'LIVE' || new Date() > new Date(match73.kickoff));
+    // Current round is the first stage that is not completed.
+    // If all stages are completed, default to the last stage (Chung kết).
+    let currentRound = 'Vòng bảng';
+    const activeStage = stagesOrder.find(stage => !completedStages.includes(stage));
+    if (activeStage) {
+        currentRound = activeStage;
+    } else {
+        currentRound = stagesOrder[stagesOrder.length - 1];
+    }
+
+    // Check if knockout stage points are activated (Match 85 is finished)
+    const match85 = matches.find(m => m.id === 85);
+    const isKnockoutStarted = match85 && match85.status === 'FT';
     
     // a. Current Leader (Nhà vô địch hiện tại) - Resets on Knockout stage
     let leader = null;
@@ -614,17 +622,25 @@ export async function fetchSpecialAwards(matches) {
         if (isKnockoutStarted) {
             // Sort by knockout_points descending when in knockout phase
             sortedForLeader.sort((a, b) => b.knockout_points - a.knockout_points);
+            const maxKnockoutPoints = sortedForLeader[0].knockout_points;
+            const knockoutLeaders = sortedForLeader
+                .filter(p => p.knockout_points === maxKnockoutPoints)
+                .map(p => p.player_name);
             leader = { 
-                name: sortedForLeader[0].player_name, 
-                points: sortedForLeader[0].knockout_points, 
+                name: formatMultipleNames(knockoutLeaders), 
+                points: maxKnockoutPoints, 
                 stage: 'Knockout' 
             };
         } else {
             // Sort by group_points descending when in group phase
             sortedForLeader.sort((a, b) => b.group_points - a.group_points);
+            const maxGroupPoints = sortedForLeader[0].group_points;
+            const groupLeaders = sortedForLeader
+                .filter(p => p.group_points === maxGroupPoints)
+                .map(p => p.player_name);
             leader = { 
-                name: sortedForLeader[0].player_name, 
-                points: sortedForLeader[0].group_points, 
+                name: formatMultipleNames(groupLeaders), 
+                points: maxGroupPoints, 
                 stage: 'Vòng bảng' 
             };
         }
@@ -643,82 +659,165 @@ export async function fetchSpecialAwards(matches) {
     });
     const mostExact = maxExact > 0 ? { name: formatMultipleNames(mostExactPlayers), value: maxExact } : null;
 
-    // c. Highest Single Match Points (Kỷ lục gia) - Resets after each round
-    let highestSingle = null;
-    const currentRoundMatchIds = matches.filter(m => m.stage === currentRound).map(m => m.id);
-    
-    if (currentRoundMatchIds.length > 0) {
-        if (isDemoMode()) {
-            const preds = JSON.parse(localStorage.getItem('WC_MOCK_PREDICTIONS') || '[]');
-            let maxPoints = 0;
-            let highestPred = null;
-            
-            preds.forEach(pr => {
-                if (currentRoundMatchIds.includes(pr.match_id)) {
-                    const pts = parseFloat(pr.points || 0);
-                    if (pts > maxPoints) {
-                        maxPoints = pts;
-                        highestPred = pr;
+    // c. Get best predictions for ALL stages to build active record and archives
+    const bestByStage = {};
+    if (isDemoMode()) {
+        const preds = JSON.parse(localStorage.getItem('WC_MOCK_PREDICTIONS') || '[]');
+        const stagePredsMap = {};
+        preds.forEach(pr => {
+            const pts = parseFloat(pr.points || 0);
+            if (pts > 0) {
+                const match = matches.find(m => m.id === pr.match_id);
+                if (match) {
+                    const stage = match.stage;
+                    if (!stagePredsMap[stage]) {
+                        stagePredsMap[stage] = [];
                     }
+                    const player = players.find(p => p.id === pr.player_id);
+                    stagePredsMap[stage].push({
+                        name: player ? player.name : 'Unknown',
+                        points: pts,
+                        match_str: `${match.team_a} vs ${match.team_b}`
+                    });
                 }
-            });
-            
-            if (highestPred) {
-                const player = players.find(p => p.id === highestPred.player_id);
-                const match = matches.find(m => m.id === highestPred.match_id);
-                highestSingle = {
-                    name: player ? player.name : 'Unknown',
-                    points: Math.round(maxPoints * 10) / 10,
-                    match: match ? `${match.team_a} vs ${match.team_b}` : `Trận ${highestPred.match_id}`,
-                    round: currentRound
+            }
+        });
+        
+        stagesOrder.forEach(stage => {
+            const stagePreds = stagePredsMap[stage];
+            if (stagePreds && stagePreds.length > 0) {
+                const maxPts = Math.max(...stagePreds.map(p => p.points));
+                const winners = stagePreds.filter(p => p.points === maxPts);
+                const winnerNames = winners.map(w => w.name);
+                const uniqueMatches = [...new Set(winners.map(w => w.match_str))];
+                bestByStage[stage] = {
+                    name: formatMultipleNames(winnerNames),
+                    points: Math.round(maxPts * 10) / 10,
+                    match: uniqueMatches.join(', ')
                 };
             }
-        } else {
-            const supabase = getSupabase();
-            if (supabase) {
-                const { data: maxPred, error: pErr } = await supabase
-                    .from('predictions')
-                    .select(`
-                        points,
-                        match_id,
-                        player_id,
-                        matches (team_a, team_b, stage),
-                        players (name)
-                    `)
-                    .gt('points', 0)
-                    .in('match_id', currentRoundMatchIds)
-                    .order('points', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+        });
+    } else {
+        const supabase = getSupabase();
+        if (supabase) {
+            const { data: allBestPreds, error: pErr } = await supabase
+                .from('predictions')
+                .select(`
+                    points,
+                    match_id,
+                    player_id,
+                    matches (team_a, team_b, stage),
+                    players (name)
+                `)
+                .gt('points', 0)
+                .order('points', { ascending: false });
 
-                if (!pErr && maxPred) {
-                    const pName = maxPred.players ? (maxPred.players.name || maxPred.players[0]?.name) : 'Unknown';
-                    const mData = maxPred.matches ? (maxPred.matches[0] || maxPred.matches) : null;
-                    highestSingle = {
-                        name: pName,
-                        points: Math.round(parseFloat(maxPred.points) * 10) / 10,
-                        match: mData ? `${mData.team_a} vs ${mData.team_b}` : `Trận ${maxPred.match_id}`,
-                        round: currentRound
-                    };
-                }
+            if (!pErr && allBestPreds) {
+                const stagePredsMap = {};
+                allBestPreds.forEach(pr => {
+                    const mData = pr.matches ? (pr.matches[0] || pr.matches) : null;
+                    if (mData) {
+                        const stage = mData.stage;
+                        if (!stagePredsMap[stage]) {
+                            stagePredsMap[stage] = [];
+                        }
+                        const pName = pr.players ? (pr.players.name || pr.players[0]?.name) : 'Unknown';
+                        stagePredsMap[stage].push({
+                            name: pName,
+                            points: parseFloat(pr.points),
+                            match_str: `${mData.team_a} vs ${mData.team_b}`
+                        });
+                    }
+                });
+                
+                stagesOrder.forEach(stage => {
+                    const stagePreds = stagePredsMap[stage];
+                    if (stagePreds && stagePreds.length > 0) {
+                        const maxPts = Math.max(...stagePreds.map(p => p.points));
+                        const winners = stagePreds.filter(p => p.points === maxPts);
+                        const winnerNames = winners.map(w => w.name);
+                        const uniqueMatches = [...new Set(winners.map(w => w.match_str))];
+                        bestByStage[stage] = {
+                            name: formatMultipleNames(winnerNames),
+                            points: Math.round(maxPts * 10) / 10,
+                            match: uniqueMatches.join(', ')
+                        };
+                    }
+                });
             }
         }
     }
 
+    // Active record card (Kỷ lục gia of the currentRound)
+    const highestSingle = bestByStage[currentRound] ? {
+        name: bestByStage[currentRound].name,
+        points: bestByStage[currentRound].points,
+        match: bestByStage[currentRound].match,
+        round: currentRound
+    } : null;
+
     // d. Most Dedicated (Cống Hiến Nhất) - bottom of the leaderboard (lowest points/most negative points)
     let mostDedicated = null;
     if (leaderboard.length > 0) {
-        const minPoints = leaderboard[leaderboard.length - 1].total_points;
-        const bottomPlayers = leaderboard
-            .filter(p => p.total_points === minPoints)
-            .map(p => p.player_name);
-        mostDedicated = { 
-            name: formatMultipleNames(bottomPlayers), 
-            value: minPoints 
-        };
+        if (isKnockoutStarted) {
+            // Sort by knockout_points ascending to find bottom players of knockout stage
+            const sortedForDedicated = [...leaderboard].sort((a, b) => a.knockout_points - b.knockout_points);
+            const minKnockoutPoints = sortedForDedicated[0].knockout_points;
+            const bottomPlayers = sortedForDedicated
+                .filter(p => p.knockout_points === minKnockoutPoints)
+                .map(p => p.player_name);
+            mostDedicated = { 
+                name: formatMultipleNames(bottomPlayers), 
+                value: minKnockoutPoints 
+            };
+        } else {
+            // Sort by group_points ascending to find bottom players of group stage
+            const sortedForDedicated = [...leaderboard].sort((a, b) => a.group_points - b.group_points);
+            const minGroupPoints = sortedForDedicated[0].group_points;
+            const bottomPlayers = sortedForDedicated
+                .filter(p => p.group_points === minGroupPoints)
+                .map(p => p.player_name);
+            mostDedicated = { 
+                name: formatMultipleNames(bottomPlayers), 
+                value: minGroupPoints 
+            };
+        }
     }
 
-    return { leader, mostExact, highestSingle, mostDedicated, currentRound };
+    // e. Build archives list
+    const archives = [];
+    
+    // Archive Group Stage Leader once Group Stage is completed
+    const groupStageCompleted = completedStages.includes('Vòng bảng');
+    if (groupStageCompleted && leaderboard.length > 0) {
+        const sortedGroup = [...leaderboard].sort((a, b) => b.group_points - a.group_points);
+        if (sortedGroup.length > 0) {
+            const maxGroupPoints = sortedGroup[0].group_points;
+            const groupLeaders = sortedGroup
+                .filter(p => p.group_points === maxGroupPoints)
+                .map(p => p.player_name);
+            archives.push({
+                icon: '👑',
+                label: 'Vô địch Vòng bảng',
+                name: formatMultipleNames(groupLeaders),
+                detail: `${maxGroupPoints}đ`
+            });
+        }
+    }
+
+    // Archive completed stages records
+    completedStages.forEach(stage => {
+        if (bestByStage[stage]) {
+            archives.push({
+                icon: '⚡',
+                label: `Kỷ lục ${stage}`,
+                name: bestByStage[stage].name,
+                detail: `+${bestByStage[stage].points}đ (${bestByStage[stage].match})`
+            });
+        }
+    });
+
+    return { leader, mostExact, highestSingle, mostDedicated, currentRound, archives };
 }
 
 
