@@ -320,6 +320,71 @@ async function renderLeaderboard() {
     const board = await db.fetchLeaderboard();
     body.innerHTML = '';
     
+    // Render Hall of Fame
+    const hofContainer = document.getElementById('hall-of-fame-container');
+    if (hofContainer) {
+        hofContainer.innerHTML = '';
+        try {
+            const awards = await db.fetchSpecialAwards(allMatches);
+            if (awards) {
+                const grid = document.createElement('div');
+                grid.className = 'awards-grid';
+                
+                // Card 1: Leader (Resets on Knockout stage)
+                let leaderHtml = '';
+                if (awards.leader) {
+                    const leaderTitle = awards.leader.stage === 'Knockout' ? 'Vô Địch Knockout' : 'Vô Địch Vòng Bảng';
+                    leaderHtml = `
+                        <div class="award-card gold">
+                            <div class="award-icon">👑</div>
+                            <div class="award-title">${leaderTitle}</div>
+                            <div class="award-winner" title="${awards.leader.name}">${awards.leader.name}</div>
+                            <div class="award-detail">${awards.leader.points}đ</div>
+                        </div>
+                    `;
+                }
+
+                // Card 2: Most Exact
+                const exactHtml = awards.mostExact ? `
+                    <div class="award-card orange">
+                        <div class="award-icon">🎯</div>
+                        <div class="award-title">Vua Dự Đoán</div>
+                        <div class="award-winner" title="${awards.mostExact.name}">${awards.mostExact.name}</div>
+                        <div class="award-detail">Đúng ${awards.mostExact.value} trận</div>
+                    </div>
+                ` : '';
+
+                // Card 3: Highest Single Match (Resets after each round)
+                const recordHtml = awards.highestSingle ? `
+                    <div class="award-card cyan">
+                        <div class="award-icon">⚡</div>
+                        <div class="award-title">Kỷ Lục ${awards.highestSingle.round}</div>
+                        <div class="award-winner" title="${awards.highestSingle.name}">${awards.highestSingle.name}</div>
+                        <div class="award-detail">+${awards.highestSingle.points}đ</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; margin-top: 2px;" title="${awards.highestSingle.match}">
+                            ${awards.highestSingle.match}
+                        </div>
+                    </div>
+                ` : '';
+
+                // Card 4: Most Dedicated (Cống Hiến Nhất - Bottom of Leaderboard)
+                const dedicatedHtml = awards.mostDedicated ? `
+                    <div class="award-card magenta">
+                        <div class="award-icon">🩹</div>
+                        <div class="award-title">Cống Hiến Nhất</div>
+                        <div class="award-winner" title="${awards.mostDedicated.name}">${awards.mostDedicated.name}</div>
+                        <div class="award-detail">${awards.mostDedicated.value}đ</div>
+                    </div>
+                ` : '';
+
+                grid.innerHTML = `${leaderHtml}${exactHtml}${recordHtml}${dedicatedHtml}`;
+                hofContainer.appendChild(grid);
+            }
+        } catch (e) {
+            console.error('Error rendering Hall of Fame:', e);
+        }
+    }
+
     if (board.length === 0) {
         body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Không có dữ liệu xếp hạng.</td></tr>';
         return;

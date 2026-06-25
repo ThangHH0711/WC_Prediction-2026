@@ -576,6 +576,152 @@ export async function fetchLeaderboard() {
     return data;
 }
 
+// Fetch special achievement awards for the Hall of Fame
+export async function fetchSpecialAwards(matches) {
+    const leaderboard = await fetchLeaderboard();
+    const players = await fetchPlayers();
+    
+    // Helper to format multiple names cleanly
+    function formatMultipleNames(namesArray) {
+        if (namesArray.length === 0) return 'Chưa có';
+        if (namesArray.length <= 2) return namesArray.join(', ');
+        return `${namesArray.slice(0, 2).join(', ')}... (+${namesArray.length - 2})`;
+    }
+
+    // Determine current active round of the tournament
+    const stagesOrder = ['Vòng bảng', 'Vòng 1/16', 'Vòng 1/8', 'Tứ kết', 'Bán kết', 'Tranh hạng 3', 'Chung kết'];
+    let currentRound = 'Vòng bảng';
+    let maxStageIndex = 0;
+    
+    matches.forEach(m => {
+        if (m.status === 'FT' || m.status === 'LIVE') {
+            const idx = stagesOrder.indexOf(m.stage);
+            if (idx > maxStageIndex) {
+                maxStageIndex = idx;
+                currentRound = m.stage;
+            }
+        }
+    });
+
+    // Check if knockout stage has started (Match 89 or Match 73 kickoff)
+    const match73 = matches.find(m => m.id === 73);
+    const isKnockoutStarted = match73 && (match73.status === 'FT' || match73.status === 'LIVE' || new Date() > new Date(match73.kickoff));
+    
+    // a. Current Leader (Nhà vô địch hiện tại) - Resets on Knockout stage
+    let leader = null;
+    if (leaderboard.length > 0) {
+        const sortedForLeader = [...leaderboard];
+        if (isKnockoutStarted) {
+            // Sort by knockout_points descending when in knockout phase
+            sortedForLeader.sort((a, b) => b.knockout_points - a.knockout_points);
+            leader = { 
+                name: sortedForLeader[0].player_name, 
+                points: sortedForLeader[0].knockout_points, 
+                stage: 'Knockout' 
+            };
+        } else {
+            // Sort by group_points descending when in group phase
+            sortedForLeader.sort((a, b) => b.group_points - a.group_points);
+            leader = { 
+                name: sortedForLeader[0].player_name, 
+                points: sortedForLeader[0].group_points, 
+                stage: 'Vòng bảng' 
+            };
+        }
+    }
+
+    // b. Most Exact (Vua dự đoán)
+    let maxExact = 0;
+    let mostExactPlayers = [];
+    leaderboard.forEach(p => {
+        if (p.exact_matches > maxExact) {
+            maxExact = p.exact_matches;
+            mostExactPlayers = [p.player_name];
+        } else if (p.exact_matches === maxExact && maxExact > 0) {
+            mostExactPlayers.push(p.player_name);
+        }
+    });
+    const mostExact = maxExact > 0 ? { name: formatMultipleNames(mostExactPlayers), value: maxExact } : null;
+
+    // c. Highest Single Match Points (Kỷ lục gia) - Resets after each round
+    let highestSingle = null;
+    const currentRoundMatchIds = matches.filter(m => m.stage === currentRound).map(m => m.id);
+    
+    if (currentRoundMatchIds.length > 0) {
+        if (isDemoMode()) {
+            const preds = JSON.parse(localStorage.getItem('WC_MOCK_PREDICTIONS') || '[]');
+            let maxPoints = 0;
+            let highestPred = null;
+            
+            preds.forEach(pr => {
+                if (currentRoundMatchIds.includes(pr.match_id)) {
+                    const pts = parseFloat(pr.points || 0);
+                    if (pts > maxPoints) {
+                        maxPoints = pts;
+                        highestPred = pr;
+                    }
+                }
+            });
+            
+            if (highestPred) {
+                const player = players.find(p => p.id === highestPred.player_id);
+                const match = matches.find(m => m.id === highestPred.match_id);
+                highestSingle = {
+                    name: player ? player.name : 'Unknown',
+                    points: Math.round(maxPoints * 10) / 10,
+                    match: match ? `${match.team_a} vs ${match.team_b}` : `Trận ${highestPred.match_id}`,
+                    round: currentRound
+                };
+            }
+        } else {
+            const supabase = getSupabase();
+            if (supabase) {
+                const { data: maxPred, error: pErr } = await supabase
+                    .from('predictions')
+                    .select(`
+                        points,
+                        match_id,
+                        player_id,
+                        matches (team_a, team_b, stage),
+                        players (name)
+                    `)
+                    .gt('points', 0)
+                    .in('match_id', currentRoundMatchIds)
+                    .order('points', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (!pErr && maxPred) {
+                    const pName = maxPred.players ? (maxPred.players.name || maxPred.players[0]?.name) : 'Unknown';
+                    const mData = maxPred.matches ? (maxPred.matches[0] || maxPred.matches) : null;
+                    highestSingle = {
+                        name: pName,
+                        points: Math.round(parseFloat(maxPred.points) * 10) / 10,
+                        match: mData ? `${mData.team_a} vs ${mData.team_b}` : `Trận ${maxPred.match_id}`,
+                        round: currentRound
+                    };
+                }
+            }
+        }
+    }
+
+    // d. Most Dedicated (Cống Hiến Nhất) - bottom of the leaderboard (lowest points/most negative points)
+    let mostDedicated = null;
+    if (leaderboard.length > 0) {
+        const minPoints = leaderboard[leaderboard.length - 1].total_points;
+        const bottomPlayers = leaderboard
+            .filter(p => p.total_points === minPoints)
+            .map(p => p.player_name);
+        mostDedicated = { 
+            name: formatMultipleNames(bottomPlayers), 
+            value: minPoints 
+        };
+    }
+
+    return { leader, mostExact, highestSingle, mostDedicated, currentRound };
+}
+
+
 // Login verification
 export async function verifyPlayerLogin(email, password) {
     if (isDemoMode()) {
