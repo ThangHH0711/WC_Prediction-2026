@@ -74,7 +74,7 @@ function seedMockChampionPredictions() {
             mockChampionPreds.push({
                 player_id: p.id,
                 predicted_team: randomTeam,
-                points: -50
+                points: -100
             });
         });
         localStorage.setItem('WC_MOCK_CHAMPION_PREDICTIONS', JSON.stringify(mockChampionPreds));
@@ -675,7 +675,7 @@ export async function submitChampionPrediction(playerId, teamName) {
     if (isDemoMode()) {
         const preds = JSON.parse(localStorage.getItem('WC_MOCK_CHAMPION_PREDICTIONS') || '[]');
         const idx = preds.findIndex(p => p.player_id === playerId);
-        const newPred = { player_id: playerId, predicted_team: teamName, points: -50 };
+        const newPred = { player_id: playerId, predicted_team: teamName, points: -100 };
         if (idx > -1) {
             preds[idx] = newPred;
         } else {
@@ -688,20 +688,20 @@ export async function submitChampionPrediction(playerId, teamName) {
     const supabase = getSupabase();
     if (!supabase) return { success: false, error: 'Database not connected' };
     
-    // Check lock time (Match 73 kickoff - 15 mins)
-    const { data: match73, error: mErr } = await supabase
+    // Check lock time (Match 89 kickoff - 15 mins)
+    const { data: match89, error: mErr } = await supabase
         .from('matches')
         .select('kickoff')
-        .eq('id', 73)
+        .eq('id', 89)
         .single();
         
-    if (mErr || !match73) {
-        return { success: false, error: 'Cannot fetch Match 73 kickoff time' };
+    if (mErr || !match89) {
+        return { success: false, error: 'Cannot fetch Match 89 kickoff time' };
     }
     
-    const lockTime = new Date(new Date(match73.kickoff).getTime() - 15 * 60 * 1000);
+    const lockTime = new Date(new Date(match89.kickoff).getTime() - 15 * 60 * 1000);
     if (new Date() > lockTime) {
-        return { success: false, error: 'Thời gian dự đoán nhà vô địch đã khóa (15 phút trước trận đấu vòng 1/16 đầu tiên)' };
+        return { success: false, error: 'Thời gian dự đoán nhà vô địch đã khóa (15 phút trước trận đấu vòng 1/8 đầu tiên)' };
     }
     
     const { error } = await supabase
@@ -709,7 +709,7 @@ export async function submitChampionPrediction(playerId, teamName) {
         .upsert({
             player_id: playerId,
             predicted_team: teamName,
-            points: -50,
+            points: -100,
             updated_at: new Date().toISOString()
         }, { onConflict: 'player_id' });
         
@@ -746,7 +746,7 @@ export async function updateChampionResult(winningTeam) {
         
         const preds = JSON.parse(localStorage.getItem('WC_MOCK_CHAMPION_PREDICTIONS') || '[]');
         const totalPlayersBet = preds.filter(p => p.predicted_team).length;
-        const totalPool = totalPlayersBet * 50;
+        const totalPool = totalPlayersBet * 100;
         
         const correctCount = preds.filter(p => p.predicted_team === winningTeam).length;
         const bonus = correctCount > 0 ? Math.round(((totalPool * 0.5) / correctCount) * 10) / 10 : 0;
@@ -755,7 +755,7 @@ export async function updateChampionResult(winningTeam) {
             if (p.predicted_team === winningTeam) {
                 p.points = bonus;
             } else if (p.predicted_team) {
-                p.points = -50;
+                p.points = -100;
             } else {
                 p.points = 0;
             }

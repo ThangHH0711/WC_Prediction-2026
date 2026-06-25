@@ -459,24 +459,24 @@ function renderPredict() {
     const filteredMatches = allMatches.filter(m => m.stage === activePredictStage);
     container.innerHTML = '';
     
-    // Add Champion Prediction Card at the top of Vòng 1/16 tab
-    if (activePredictStage === 'Vòng 1/16') {
-        const r32Matches = allMatches.filter(m => m.stage === 'Vòng 1/16');
-        const r32Teams = [];
-        r32Matches.forEach(m => {
-            if (m.team_a && !r32Teams.includes(m.team_a)) r32Teams.push(m.team_a);
-            if (m.team_b && !r32Teams.includes(m.team_b)) r32Teams.push(m.team_b);
+    // Add Champion Prediction Card at the top of Vòng 1/8 tab
+    if (activePredictStage === 'Vòng 1/8') {
+        const r16Matches = allMatches.filter(m => m.stage === 'Vòng 1/8');
+        const r16Teams = [];
+        r16Matches.forEach(m => {
+            if (m.team_a && !r16Teams.includes(m.team_a)) r16Teams.push(m.team_a);
+            if (m.team_b && !r16Teams.includes(m.team_b)) r16Teams.push(m.team_b);
         });
-        r32Teams.sort((a, b) => a.localeCompare(b, 'vi'));
+        r16Teams.sort((a, b) => a.localeCompare(b, 'vi'));
         
-        const match73 = allMatches.find(m => m.id === 73);
+        const match89 = allMatches.find(m => m.id === 89);
         let isChampLocked = false;
         let lockTimeStr = '';
-        if (match73) {
-            const kickoffTime = new Date(match73.kickoff);
+        if (match89) {
+            const kickoffTime = new Date(match89.kickoff);
             const lockTime = new Date(kickoffTime.getTime() - 15 * 60 * 1000);
             isChampLocked = new Date() > lockTime;
-            const timeFmt = formatDate(match73.kickoff);
+            const timeFmt = formatDate(match89.kickoff);
             lockTimeStr = `${timeFmt.timeStr} ngày ${timeFmt.dateStr}`;
         }
         
@@ -494,33 +494,33 @@ function renderPredict() {
             const pts = parseFloat(myChampionPrediction.points);
             if (pts > 0) {
                 pointsResult = `<span class="points-result win" style="margin-left: 8px;">+${pts} điểm (Trúng)</span>`;
-            } else if (pts === -50 && champWinnerStr) {
-                pointsResult = `<span class="points-result loss" style="margin-left: 8px;">-50 điểm (Sai)</span>`;
+            } else if (pts === -100 && champWinnerStr) {
+                pointsResult = `<span class="points-result loss" style="margin-left: 8px;">-100 điểm (Sai)</span>`;
             } else if (myChamp) {
-                pointsResult = `<span class="points-result loss" style="margin-left: 8px; background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-50 điểm (Đã cược)</span>`;
+                pointsResult = `<span class="points-result loss" style="margin-left: 8px; background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-100 điểm (Đã cược)</span>`;
             }
         }
         
         const champCard = document.createElement('div');
         if (!isChampLocked) {
             let selectOptions = `<option value="">-- Chọn đội vô địch --</option>`;
-            r32Teams.forEach(t => {
+            r16Teams.forEach(t => {
                 selectOptions += `<option value="${t}" ${t === myChamp ? 'selected' : ''}>${t}</option>`;
             });
             
             champCard.innerHTML = `
                 <div class="glass-card" style="margin-bottom: 24px; border: 1px solid rgba(234, 179, 8, 0.2); background: linear-gradient(135deg, rgba(234, 179, 8, 0.05) 0%, rgba(9, 13, 22, 0.5) 100%);">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
                         <div>
                             <h3 style="color: var(--accent-gold); font-family: var(--font-heading); display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                                🏆 DỰ ĐOÁN ĐỘI VÔ ĐỊCH (BET 50 ĐIỂM)
+                                🏆 DỰ ĐOÁN ĐỘI VÔ ĐỊCH (BET 100 ĐIỂM)
                             </h3>
                             <p style="font-size: 0.85rem; color: var(--text-secondary);">
-                                Khóa dự đoán vào lúc: <strong style="color: var(--accent-red);">${lockTimeStr}</strong> (15 phút trước vòng 1/16).
+                                Khóa dự đoán vào lúc: <strong style="color: var(--accent-red);">${lockTimeStr}</strong> (15 phút trước vòng 1/8).
                             </p>
                         </div>
                         <div style="font-size: 0.85rem; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.08);">
-                            Cược: <strong style="color: var(--accent-gold);">50 điểm</strong> | Thưởng: <strong>50% tổng quỹ cược chia đều</strong>
+                            Cược: <strong style="color: var(--accent-gold);">100 điểm</strong> | Thưởng: <strong>50% tổng quỹ cược chia đều</strong>
                         </div>
                     </div>
                     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -567,7 +567,7 @@ function renderPredict() {
                 saveChampBtn.textContent = '...';
                 const res = await db.submitChampionPrediction(currentUser.id, team);
                 if (res.success) {
-                    myChampionPrediction = { player_id: currentUser.id, predicted_team: team, points: -50 };
+                    myChampionPrediction = { player_id: currentUser.id, predicted_team: team, points: -100 };
                     saveChampBtn.style.borderColor = 'var(--accent-green)';
                     saveChampBtn.style.color = 'var(--accent-green)';
                     saveChampBtn.textContent = 'Đã lưu';
@@ -858,11 +858,11 @@ async function renderMatrix() {
     champRow.style.background = 'rgba(234, 179, 8, 0.03)';
     champRow.style.borderTop = '2px solid rgba(234, 179, 8, 0.2)';
     
-    // Check if champion is locked (Match 73 kickoff - 15 mins)
-    const match73 = allMatches.find(m => m.id === 73);
+    // Check if champion is locked (Match 89 kickoff - 15 mins)
+    const match89 = allMatches.find(m => m.id === 89);
     let isChampLocked = false;
-    if (match73) {
-        isChampLocked = new Date() > new Date(new Date(match73.kickoff).getTime() - 15 * 60 * 1000);
+    if (match89) {
+        isChampLocked = new Date() > new Date(new Date(match89.kickoff).getTime() - 15 * 60 * 1000);
     }
     
     const champPredsList = allChampionPredictions || [];
@@ -893,7 +893,7 @@ async function renderMatrix() {
             if (hasWinnerDeclared) {
                 ptsDisplay = `<div class="matrix-cell-pts ${pts > 0 ? 'win' : 'loss'}">${pts > 0 ? '+' : ''}${pts}đ</div>`;
             } else {
-                ptsDisplay = `<div class="matrix-cell-pts loss" style="background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-50đ</div>`;
+                ptsDisplay = `<div class="matrix-cell-pts loss" style="background: rgba(234,179,8,0.1); color: var(--accent-gold); border-color: rgba(234,179,8,0.2);">-100đ</div>`;
             }
             cellContent = `
                 <div class="matrix-cell-score" style="color: var(--accent-gold); font-weight: bold; font-size: 0.85rem;">${pred.predicted_team}</div>
@@ -1284,7 +1284,7 @@ async function openChampionPredictionsModal() {
     const title = document.getElementById('modal-match-title');
     const list = document.getElementById('modal-predictions-list');
     
-    title.textContent = `Dự đoán đội vô địch giải đấu (Bet 50đ)`;
+    title.textContent = `Dự đoán đội vô địch giải đấu (Bet 100đ)`;
     list.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 10px;">Đang tải...</div>';
     overlay.style.display = 'flex';
     
