@@ -1059,3 +1059,64 @@ header {
     max-width: 110px;
 }
 
+/* Small drop styling inside Cống Hiến Nhất */
+.award-icon .small-drop {
+    font-size: 1.1rem;
+    opacity: 0.6;
+}
+
+/* Mobile Responsive Optimization for Hall of Fame Cards */
+@media (max-width: 600px) {
+    .awards-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        margin-bottom: 16px !important;
+    }
+
+    .award-card {
+        padding: 8px 10px !important;
+        min-height: 110px !important;
+        border-radius: 12px !important;
+    }
+
+    .award-icon {
+        font-size: 1.3rem !important;
+        margin-bottom: 4px !important;
+    }
+
+    .award-icon .small-drop {
+        font-size: 0.8rem !important;
+    }
+
+    .award-title {
+        font-size: 0.62rem !important;
+        margin-bottom: 2px !important;
+        letter-spacing: 0.02em !important;
+    }
+
+    .award-winner {
+        font-size: 0.78rem !important;
+        margin-bottom: 2px !important;
+        line-height: 1.25 !important;
+    }
+
+    .award-detail {
+        font-size: 0.72rem !important;
+    }
+
+    .award-history {
+        margin-top: 6px !important;
+        padding-top: 6px !important;
+        gap: 3px !important;
+    }
+
+    .award-history-item {
+        font-size: 0.58rem !important;
+        gap: 4px !important;
+    }
+
+    .award-history-val {
+        max-width: 75px !important;
+    }
+}
+

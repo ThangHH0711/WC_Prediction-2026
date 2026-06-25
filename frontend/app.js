@@ -432,9 +432,9 @@ async function renderLeaderboard() {
                 const dedicatedHtml = awards.mostDedicated ? `
                     <div class="award-card magenta">
                         <div class="award-icon" style="display: flex; align-items: center; gap: 2px; justify-content: center;">
-                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span class="small-drop">🩸</span>
                             <span>🩸</span>
-                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span class="small-drop">🩸</span>
                         </div>
                         <div class="award-title">Cống Hiến Nhất</div>
                         <div class="award-winner" title="${awards.mostDedicated.name}">${awards.mostDedicated.name}</div>
@@ -443,9 +443,9 @@ async function renderLeaderboard() {
                 ` : `
                     <div class="award-card magenta">
                         <div class="award-icon" style="display: flex; align-items: center; gap: 2px; justify-content: center;">
-                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span class="small-drop">🩸</span>
                             <span>🩸</span>
-                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span class="small-drop">🩸</span>
                         </div>
                         <div class="award-title">Cống Hiến Nhất</div>
                         <div class="award-winner">Chưa có</div>
