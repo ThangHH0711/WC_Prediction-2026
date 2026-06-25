@@ -45,16 +45,16 @@ EXECUTE FUNCTION public.trg_check_champion_prediction_lock();
 CREATE OR REPLACE FUNCTION public.update_champion_result(winning_team_in TEXT)
 RETURNS VOID AS $$
 DECLARE
-    total_players_bet INT;
+    total_players INT;
     correct_count INT;
     total_pool NUMERIC;
     bonus_points NUMERIC;
 BEGIN
-    -- Count players who placed a champion prediction (each bets 100 pts)
-    SELECT COUNT(*) INTO total_players_bet FROM public.champion_predictions WHERE predicted_team IS NOT NULL;
+    -- Count all players (each bets 100 pts)
+    SELECT COUNT(*) INTO total_players FROM public.players;
     
     -- Calculate total pool
-    total_pool := total_players_bet * 100;
+    total_pool := total_players * 100;
     
     -- Count correct predictors
     SELECT COUNT(*) INTO correct_count FROM public.champion_predictions WHERE predicted_team = winning_team_in;
@@ -90,9 +90,9 @@ CREATE VIEW public.leaderboard AS
 SELECT 
     p.id AS player_id,
     p.name AS player_name,
-    COALESCE(SUM(CASE WHEN m.stage = 'Vòng bảng' THEN pr.points ELSE 0 END), 0) AS group_points,
-    (COALESCE(SUM(CASE WHEN m.stage <> 'Vòng bảng' THEN pr.points ELSE 0 END), 0) + COALESCE(MAX(cp.points), 0)) AS knockout_points,
-    (COALESCE(SUM(pr.points), 0) + COALESCE(MAX(cp.points), 0)) AS total_points,
+    (COALESCE(SUM(CASE WHEN m.stage = 'Vòng bảng' THEN pr.points ELSE 0 END), 0) + p.starting_points) AS group_points,
+    (COALESCE(SUM(CASE WHEN m.stage <> 'Vòng bảng' THEN pr.points ELSE 0 END), 0) + COALESCE(MAX(cp.points), -100)) AS knockout_points,
+    (COALESCE(SUM(pr.points), 0) + COALESCE(MAX(cp.points), -100) + p.starting_points) AS total_points,
     COUNT(pr.match_id) FILTER (WHERE pr.predict_a IS NOT NULL) AS matches_predicted,
     COUNT(pr.match_id) FILTER (WHERE pr.points > 0) AS exact_matches,
     (COALESCE(SUM(CASE WHEN pr.points > 0 THEN pr.points ELSE 0 END), 0) + COALESCE(MAX(CASE WHEN cp.points > 0 THEN cp.points ELSE 0 END), 0)) AS total_bonus
@@ -100,4 +100,4 @@ FROM public.players p
 LEFT JOIN public.predictions pr ON p.id = pr.player_id
 LEFT JOIN public.matches m ON pr.match_id = m.id
 LEFT JOIN public.champion_predictions cp ON p.id = cp.player_id
-GROUP BY p.id, p.name;
+GROUP BY p.id, p.name, p.starting_points;
