@@ -431,14 +431,22 @@ async function renderLeaderboard() {
                 // Card 4: Most Dedicated (Cống Hiến Nhất - Bottom of Leaderboard)
                 const dedicatedHtml = awards.mostDedicated ? `
                     <div class="award-card magenta">
-                        <div class="award-icon">🩹</div>
+                        <div class="award-icon" style="display: flex; align-items: center; gap: 2px; justify-content: center;">
+                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span>🩸</span>
+                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                        </div>
                         <div class="award-title">Cống Hiến Nhất</div>
                         <div class="award-winner" title="${awards.mostDedicated.name}">${awards.mostDedicated.name}</div>
                         <div class="award-detail">${awards.mostDedicated.value}đ</div>
                     </div>
                 ` : `
                     <div class="award-card magenta">
-                        <div class="award-icon">🩹</div>
+                        <div class="award-icon" style="display: flex; align-items: center; gap: 2px; justify-content: center;">
+                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                            <span>🩸</span>
+                            <span style="font-size: 1.1rem; opacity: 0.6;">🩸</span>
+                        </div>
                         <div class="award-title">Cống Hiến Nhất</div>
                         <div class="award-winner">Chưa có</div>
                         <div class="award-detail">0đ</div>
