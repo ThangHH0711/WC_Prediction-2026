@@ -298,15 +298,34 @@ export async function fetchAllPredictions() {
     const supabase = getSupabase();
     if (!supabase) return [];
     
-    const { data, error } = await supabase
-        .from('predictions')
-        .select('player_id, match_id, predict_a, predict_b, points');
+    let allData = [];
+    let from = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+    
+    while (hasMore) {
+        const { data, error } = await supabase
+            .from('predictions')
+            .select('player_id, match_id, predict_a, predict_b, points')
+            .range(from, from + batchSize - 1);
+            
+        if (error) {
+            console.error('Error fetching all predictions:', error);
+            return allData; // Return whatever we managed to fetch
+        }
         
-    if (error) {
-        console.error('Error fetching all predictions:', error);
-        return [];
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            if (data.length < batchSize) {
+                hasMore = false;
+            } else {
+                from += batchSize;
+            }
+        } else {
+            hasMore = false;
+        }
     }
-    return data;
+    return allData;
 }
 
 // Submit/Upsert a prediction
@@ -700,19 +719,45 @@ export async function fetchSpecialAwards(matches) {
     } else {
         const supabase = getSupabase();
         if (supabase) {
-            const { data: allBestPreds, error: pErr } = await supabase
-                .from('predictions')
-                .select(`
-                    points,
-                    match_id,
-                    player_id,
-                    matches (team_a, team_b, stage),
-                    players (name)
-                `)
-                .gt('points', 0)
-                .order('points', { ascending: false });
+            let allBestPreds = [];
+            let from = 0;
+            const batchSize = 1000;
+            let hasMore = true;
+            let pErr = null;
+            
+            while (hasMore) {
+                const { data: batchData, error: err } = await supabase
+                    .from('predictions')
+                    .select(`
+                        points,
+                        match_id,
+                        player_id,
+                        matches (team_a, team_b, stage),
+                        players (name)
+                    `)
+                    .gt('points', 0)
+                    .order('points', { ascending: false })
+                    .range(from, from + batchSize - 1);
+                    
+                if (err) {
+                    pErr = err;
+                    console.error('Error fetching best predictions:', err);
+                    break;
+                }
+                
+                if (batchData && batchData.length > 0) {
+                    allBestPreds = allBestPreds.concat(batchData);
+                    if (batchData.length < batchSize) {
+                        hasMore = false;
+                    } else {
+                        from += batchSize;
+                    }
+                } else {
+                    hasMore = false;
+                }
+            }
 
-            if (!pErr && allBestPreds) {
+            if (!pErr && allBestPreds.length > 0) {
                 const stagePredsMap = {};
                 allBestPreds.forEach(pr => {
                     const mData = pr.matches ? (pr.matches[0] || pr.matches) : null;
