@@ -310,6 +310,20 @@ function formatDate(isoString) {
     };
 }
 
+// Get penalty points for not predicting based on stage
+function getNoPredictionPenalty(stage) {
+    switch (stage) {
+        case 'Vòng bảng': return -15;
+        case 'Vòng 1/16': return -20;
+        case 'Vòng 1/8': return -25;
+        case 'Tứ kết': return -30;
+        case 'Bán kết': return -50;
+        case 'Tranh hạng 3':
+        case 'Chung kết': return -70;
+        default: return -15;
+    }
+}
+
 // RENDER LEADERBOARD VIEW
 async function renderLeaderboard() {
     const body = document.getElementById('leaderboard-body');
@@ -974,8 +988,10 @@ async function renderMatrix() {
             } else {
                 let ptsDisplay = '';
                 if (m.status === 'FT') {
-                    const pts = parseFloat(pred ? pred.points : 0);
-                    ptsDisplay = `<div class="matrix-cell-pts loss">${pts}đ</div>`;
+                    const pts = (pred && pred.points !== null && pred.points !== undefined) 
+                        ? parseFloat(pred.points) 
+                        : getNoPredictionPenalty(m.stage);
+                    ptsDisplay = `<div class="matrix-cell-pts loss">${pts >= 0 ? '+' : ''}${pts}đ</div>`;
                 }
                 
                 let noPredText = m.status === 'FT' ? 'Không đoán' : 'Chưa đoán';
@@ -1399,8 +1415,10 @@ async function openPredictionsModal(matchId, matchTitle) {
         }
         
         let ptsText = '';
-        if (match && match.status === 'FT' && pred.predict_a !== null) {
-            const pts = parseFloat(pred.points);
+        if (match && match.status === 'FT') {
+            const pts = (pred.points !== null && pred.points !== undefined) 
+                ? parseFloat(pred.points) 
+                : getNoPredictionPenalty(match.stage);
             ptsText = `<span style="font-weight: 700; font-size: 0.8rem; margin-left: 8px; color: ${pts >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">
                 (${pts >= 0 ? '+' : ''}${pts}đ)
             </span>`;
