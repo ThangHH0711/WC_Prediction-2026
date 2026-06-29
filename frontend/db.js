@@ -141,7 +141,7 @@ export async function addPlayer(name, email, role, password) {
         const board = await fetchLeaderboard();
         if (board && board.length > 0) {
             // board is already sorted descending by total_points
-            lastPlaceScore = board[board.length - 1].total_points;
+            lastPlaceScore = Math.min(...board.map(p => p.total_points));
         }
     } catch (err) {
         console.error('Error fetching leaderboard for starting points:', err);
@@ -520,8 +520,7 @@ export async function fetchLeaderboard() {
         const matches = await fetchMatches();
         
         const players = await fetchPlayers();
-        const match85 = matches.find(m => m.id === 85);
-        const isKnockoutActivated = match85 && match85.status === 'FT';
+        const isKnockoutActivated = matches.some(m => m.stage !== 'Vòng bảng' && m.status === 'FT');
         
         const board = players.map(p => {
             const pPreds = preds.filter(pr => pr.player_id === p.id);
@@ -577,7 +576,15 @@ export async function fetchLeaderboard() {
             };
         });
         
-        // Sort descending by total_points
+        // Sort descending by knockout_points if knockout activated, otherwise total_points
+        if (isKnockoutActivated) {
+            return board.sort((a, b) => {
+                if (b.knockout_points !== a.knockout_points) {
+                    return b.knockout_points - a.knockout_points;
+                }
+                return b.total_points - a.total_points;
+            });
+        }
         return board.sort((a, b) => b.total_points - a.total_points);
     }
     
@@ -586,14 +593,26 @@ export async function fetchLeaderboard() {
     
     const { data, error } = await supabase
         .from('leaderboard')
-        .select('*')
-        .order('total_points', { ascending: false });
+        .select('*');
         
     if (error) {
         console.error('Error fetching leaderboard:', error);
         return [];
     }
-    return data;
+
+    const matches = await fetchMatches();
+    const isKnockoutStarted = matches.some(m => m.stage !== 'Vòng bảng' && m.status === 'FT');
+    
+    if (isKnockoutStarted) {
+        return data.sort((a, b) => {
+            if (b.knockout_points !== a.knockout_points) {
+                return b.knockout_points - a.knockout_points;
+            }
+            return b.total_points - a.total_points;
+        });
+    }
+    
+    return data.sort((a, b) => b.total_points - a.total_points);
 }
 
 // Fetch special achievement awards for the Hall of Fame
@@ -630,9 +649,8 @@ export async function fetchSpecialAwards(matches) {
         currentRound = stagesOrder[stagesOrder.length - 1];
     }
 
-    // Check if knockout stage points are activated (Match 85 is finished)
-    const match85 = matches.find(m => m.id === 85);
-    const isKnockoutStarted = match85 && match85.status === 'FT';
+    // Check if knockout stage points are activated (any knockout match is finished)
+    const isKnockoutStarted = matches.some(m => m.stage !== 'Vòng bảng' && m.status === 'FT');
     
     // a. Current Leader (Nhà vô địch hiện tại) - Resets on Knockout stage
     let leader = null;
