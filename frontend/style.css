@@ -20,6 +20,9 @@
     --accent-gold: hsl(47, 95%, 50%);
     --accent-gold-glow: rgba(234, 179, 8, 0.25);
     
+    --accent-orange: hsl(24, 100%, 50%);
+    --accent-orange-glow: rgba(249, 115, 22, 0.25);
+    
     --accent-red: hsl(350, 84%, 48%);
     --accent-blue: hsl(217, 91%, 60%);
     
@@ -634,6 +637,22 @@ header {
 
 .matrix-cell-pts.win { color: var(--accent-green); }
 .matrix-cell-pts.loss { color: var(--accent-red); }
+
+/* Projected Points Styling */
+.matrix-cell-projected-pts {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent-orange);
+    margin-top: 1px;
+}
+
+.projected-points-badge {
+    color: var(--accent-orange);
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-left: 8px;
+    white-space: nowrap;
+}
 
 /* MOBILE BOTTOM NAV */
 .mobile-nav {

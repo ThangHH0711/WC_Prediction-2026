@@ -521,9 +521,12 @@ async function renderLeaderboard() {
 }
 
 // RENDER PREDICT (MATCHES LIST) VIEW
-function renderPredict() {
+async function renderPredict() {
     const container = document.getElementById('matches-container');
     const stageNav = document.querySelector('.stage-navigation');
+    
+    // Fetch all predictions in the system to calculate projected points
+    const allPredictions = await db.fetchAllPredictions();
     
     // 1. Render filter tabs
     const stages = ['Vòng bảng', 'Vòng 1/16', 'Vòng 1/8', 'Tứ kết', 'Bán kết', 'Tranh hạng 3', 'Chung kết'];
@@ -762,6 +765,9 @@ function renderPredict() {
         const myPred = myPredictions.find(p => p.match_id === m.id);
         const hasPred = myPred !== undefined;
         
+        // Filter predictions for this match once
+        const matchPreds = allPredictions.filter(pr => pr.match_id === m.id);
+        
         // Calculate kickoff times and lock state
         const kickoffTime = new Date(m.kickoff);
         const now = new Date();
@@ -795,6 +801,9 @@ function renderPredict() {
                 if (m.status === 'FT') {
                     const pts = parseFloat(myPred.points);
                     pointsResult = `<span class="points-result ${pts >= 0 ? 'win' : 'loss'}">${pts >= 0 ? '+' : ''}${pts} điểm</span>`;
+                } else {
+                    const projPts = calculateProjectedPoints(m, myPred.predict_a, myPred.predict_b, matchPreds);
+                    pointsResult = `<span class="points-result projected" style="color: var(--accent-orange); font-weight: bold;">Nếu đúng: +${projPts}đ</span>`;
                 }
                 
                 predictionContent = `
@@ -819,13 +828,22 @@ function renderPredict() {
             const valA = hasPred && myPred.predict_a !== null ? myPred.predict_a : '';
             const valB = hasPred && myPred.predict_b !== null ? myPred.predict_b : '';
             
+            let projPtsDisplay = '';
+            if (valA !== '' && valB !== '') {
+                const projPts = calculateProjectedPoints(m, parseInt(valA), parseInt(valB), matchPreds);
+                projPtsDisplay = `<span class="projected-points-badge" style="color: var(--accent-orange); font-size: 0.8rem; font-weight: bold; margin-left: 8px; white-space: nowrap;">Nếu đúng: +${projPts}đ</span>`;
+            }
+            
             predictionContent = `
                 <div class="prediction-box">
-                    <span style="font-size: 0.85rem; color: var(--text-secondary);">Dự đoán:</span>
-                    <div class="prediction-inputs">
-                        <input type="number" min="0" class="pred-input" id="pred-${m.id}-a" value="${valA}" placeholder="A">
-                        <span style="color: var(--text-muted); font-weight: bold;">-</span>
-                        <input type="number" min="0" class="pred-input" id="pred-${m.id}-b" value="${valB}" placeholder="B">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="font-size: 0.85rem; color: var(--text-secondary);">Dự đoán:</span>
+                        <div class="prediction-inputs">
+                            <input type="number" min="0" class="pred-input" id="pred-${m.id}-a" value="${valA}" placeholder="A">
+                            <span style="color: var(--text-muted); font-weight: bold;">-</span>
+                            <input type="number" min="0" class="pred-input" id="pred-${m.id}-b" value="${valB}" placeholder="B">
+                        </div>
+                        ${projPtsDisplay}
                     </div>
                     <button class="btn-save-pred" data-match-id="${m.id}">Lưu</button>
                 </div>
@@ -907,6 +925,39 @@ function renderPredict() {
         });
     });
     
+    // Add Input change listeners to calculate projected points dynamically
+    filteredMatches.forEach(m => {
+        const inputA = container.querySelector(`#pred-${m.id}-a`);
+        const inputB = container.querySelector(`#pred-${m.id}-b`);
+        if (inputA && inputB) {
+            const matchPreds = allPredictions.filter(pr => pr.match_id === m.id);
+            const updateProjBadge = () => {
+                const valA = inputA.value;
+                const valB = inputB.value;
+                let badge = inputA.closest('.prediction-box').querySelector('.projected-points-badge');
+                if (valA !== '' && valB !== '') {
+                    const projPts = calculateProjectedPoints(m, parseInt(valA), parseInt(valB), matchPreds);
+                    const badgeText = `Nếu đúng: +${projPts}đ`;
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'projected-points-badge';
+                        badge.style.cssText = 'color: var(--accent-orange); font-size: 0.8rem; font-weight: bold; margin-left: 8px; white-space: nowrap;';
+                        inputB.parentElement.insertAdjacentElement('afterend', badge);
+                    }
+                    badge.textContent = badgeText;
+                    badge.style.display = '';
+                } else {
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                }
+            };
+            
+            inputA.addEventListener('input', updateProjBadge);
+            inputB.addEventListener('input', updateProjBadge);
+        }
+    });
+    
     // Add View Others listeners
     const viewButtons = container.querySelectorAll('.btn-view-predictions');
     viewButtons.forEach(btn => {
@@ -916,6 +967,46 @@ function renderPredict() {
             openPredictionsModal(parseInt(mId), mTitle);
         });
     });
+}
+
+// Calculate projected points for a hypothetical actual score of a match
+function calculateProjectedPoints(match, scoreA, scoreB, matchPreds) {
+    let p_xt = 5, p_ts = 2, p_kdd = 15;
+    const stage = match.stage;
+    if (stage === 'Vòng 1/16') { p_xt = 10; p_ts = 4; p_kdd = 20; }
+    else if (stage === 'Vòng 1/8') { p_xt = 12; p_ts = 5; p_kdd = 25; }
+    else if (stage === 'Tứ kết') { p_xt = 15; p_ts = 6; p_kdd = 30; }
+    else if (stage === 'Bán kết') { p_xt = 20; p_ts = 8; p_kdd = 50; }
+    else if (stage === 'Tranh hạng 3' || stage === 'Chung kết') { p_xt = 30; p_ts = 12; p_kdd = 70; }
+
+    let totalLostPoints = 0;
+    let exactWinnersCount = 0;
+
+    allPlayers.forEach(p => {
+        const pred = matchPreds.find(pr => pr.player_id === p.id);
+        if (!pred || pred.predict_a === null || pred.predict_a === undefined || pred.predict_b === null || pred.predict_b === undefined) {
+            totalLostPoints += p_kdd;
+        } else {
+            if (pred.predict_a === scoreA && pred.predict_b === scoreB) {
+                exactWinnersCount++;
+            } else {
+                let pts = 0;
+                const tend_act = Math.sign(scoreA - scoreB);
+                const tend_pred = Math.sign(pred.predict_a - pred.predict_b);
+                if (tend_act !== tend_pred) {
+                    pts -= p_xt;
+                }
+                const diff = Math.abs(pred.predict_a - scoreA) + Math.abs(pred.predict_b - scoreB);
+                pts -= (diff * p_ts);
+                totalLostPoints += Math.abs(pts);
+            }
+        }
+    });
+
+    if (exactWinnersCount > 0 && totalLostPoints > 0) {
+        return Math.round(((totalLostPoints * 0.4) / exactWinnersCount) * 10) / 10;
+    }
+    return 0;
 }
 
 // RENDER MATRIX VIEW (Detailed spreadsheet grid)
@@ -948,6 +1039,9 @@ async function renderMatrix() {
     allMatches.forEach(m => {
         const tr = document.createElement('tr');
         
+        // Filter predictions for this match once
+        const matchPreds = allPredictions.filter(pr => pr.match_id === m.id);
+        
         // Kickoff times/lock state
         const kickoffTime = new Date(m.kickoff);
         const now = new Date();
@@ -964,7 +1058,7 @@ async function renderMatrix() {
         
         playersList.forEach(p => {
             // Find prediction
-            const pred = allPredictions.find(pr => pr.player_id === p.id && pr.match_id === m.id);
+            const pred = matchPreds.find(pr => pr.player_id === p.id);
             
             let cellContent = '';
             // Display prediction of all players immediately (public at all times)
@@ -973,6 +1067,9 @@ async function renderMatrix() {
                 if (m.status === 'FT') {
                     const pts = parseFloat(pred.points);
                     ptsDisplay = `<div class="matrix-cell-pts ${pts >= 0 ? 'win' : 'loss'}">${pts >= 0 ? '+' : ''}${pts}đ</div>`;
+                } else {
+                    const projPts = calculateProjectedPoints(m, pred.predict_a, pred.predict_b, matchPreds);
+                    ptsDisplay = `<div class="matrix-cell-projected-pts">(+${projPts}đ)</div>`;
                 }
                 
                 // Highlight own prediction in light blue
