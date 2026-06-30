@@ -228,10 +228,100 @@ export async function deletePlayer(playerId) {
     return { success: true };
 }
 
+// Resolve placeholder team name dynamically
+function resolveTeamName(teamName, matches) {
+    if (!teamName) return "";
+    const match = teamName.match(/^(Thắng|Thua)\s+.*\s+trận\s+(\d+)$/);
+    if (!match) {
+        return teamName;
+    }
+    
+    const type = match[1];
+    const matchId = parseInt(match[2], 10);
+    
+    const targetMatch = matches.find(m => m.id === matchId);
+    if (!targetMatch) {
+        return teamName;
+    }
+    
+    if (targetMatch.status !== 'FT' || targetMatch.score_a === null || targetMatch.score_b === null) {
+        return teamName;
+    }
+    
+    const teamA = resolveTeamName(targetMatch.team_a, matches);
+    const teamB = resolveTeamName(targetMatch.team_b, matches);
+    
+    if (targetMatch.score_a > targetMatch.score_b) {
+        return type === 'Thắng' ? teamA : teamB;
+    } else if (targetMatch.score_b > targetMatch.score_a) {
+        return type === 'Thắng' ? teamB : teamA;
+    } else {
+        return teamName;
+    }
+}
+
+// Helper to determine winner/loser of a knockout match
+function getMatchResult(match, matches) {
+    if (!match || match.status !== 'FT' || match.score_a === null || match.score_b === null) {
+        return null;
+    }
+    
+    const teamA = resolveTeamName(match.team_a, matches);
+    const teamB = resolveTeamName(match.team_b, matches);
+    
+    if (match.score_a > match.score_b) {
+        return { winner: teamA, loser: teamB };
+    } else if (match.score_b > match.score_a) {
+        return { winner: teamB, loser: teamA };
+    } else {
+        return null;
+    }
+}
+
+// Propagate winners to subsequent rounds
+function propagateWinners(matches) {
+    let changed = false;
+    for (let pass = 0; pass < 5; pass++) {
+        let passChanged = false;
+        matches.forEach(m => {
+            const result = getMatchResult(m, matches);
+            if (result) {
+                const stageCode = m.stage === 'Vòng 1/16' ? 'R32' : m.stage === 'Vòng 1/8' ? 'R16' : m.stage === 'Tứ kết' ? 'TK' : m.stage === 'Bán kết' ? 'BK' : '';
+                if (!stageCode) return;
+                
+                const winnerPlaceholder = `Thắng ${stageCode} trận ${m.id}`;
+                const loserPlaceholder = `Thua ${stageCode} trận ${m.id}`;
+                
+                matches.forEach(nextMatch => {
+                    if (nextMatch.team_a === winnerPlaceholder) {
+                        nextMatch.team_a = result.winner;
+                        passChanged = true;
+                    }
+                    if (nextMatch.team_a === loserPlaceholder) {
+                        nextMatch.team_a = result.loser;
+                        passChanged = true;
+                    }
+                    if (nextMatch.team_b === winnerPlaceholder) {
+                        nextMatch.team_b = result.winner;
+                        passChanged = true;
+                    }
+                    if (nextMatch.team_b === loserPlaceholder) {
+                        nextMatch.team_b = result.loser;
+                        passChanged = true;
+                    }
+                });
+            }
+        });
+        if (!passChanged) break;
+        changed = true;
+    }
+    return changed;
+}
+
 // Fetch matches
 export async function fetchMatches() {
+    let matches = [];
     if (isDemoMode()) {
-        let matches = [];
         try {
             const stored = localStorage.getItem('WC_MOCK_MATCHES');
             if (stored) {
@@ -250,23 +340,26 @@ export async function fetchMatches() {
         } catch (err) {
             console.error('Error loading mock matches.json:', err);
         }
-        return matches;
-    }
-    
-    const supabase = getSupabase();
-    if (!supabase) return [];
-    
-    const { data, error } = await supabase
-        .from('matches')
-        .select('*')
-        .order('kickoff', { ascending: true })
-        .order('id', { ascending: true });
+    } else {
+        const supabase = getSupabase();
+        if (!supabase) return [];
         
-    if (error) {
-        console.error('Error fetching matches:', error);
-        return [];
+        const { data, error } = await supabase
+            .from('matches')
+            .select('*')
+            .order('kickoff', { ascending: true })
+            .order('id', { ascending: true });
+            
+        if (error) {
+            console.error('Error fetching matches:', error);
+            return [];
+        }
+        matches = data || [];
     }
-    return data;
+    
+    // Dynamic bracket propagation
+    propagateWinners(matches);
+    return matches;
 }
 
 // Fetch predictions for a specific player
@@ -478,6 +571,24 @@ export async function updateMatchResult(matchId, scoreA, scoreB, status, teamA =
             matches[idx].status = status;
             if (teamA) matches[idx].team_a = teamA;
             if (teamB) matches[idx].team_b = teamB;
+            
+            // Bracket winner propagation
+            propagateWinners(matches);
+            
+            // Also update any mock champion predictions that matched the placeholders
+            const champPreds = JSON.parse(localStorage.getItem('WC_MOCK_CHAMPION_PREDICTIONS') || '[]');
+            let cpChanged = false;
+            champPreds.forEach(cp => {
+                const resolved = resolveTeamName(cp.predicted_team, matches);
+                if (resolved !== cp.predicted_team) {
+                    cp.predicted_team = resolved;
+                    cpChanged = true;
+                }
+            });
+            if (cpChanged) {
+                localStorage.setItem('WC_MOCK_CHAMPION_PREDICTIONS', JSON.stringify(champPreds));
+            }
+            
             localStorage.setItem('WC_MOCK_MATCHES', JSON.stringify(matches));
             
             // Calculate points if finished
@@ -509,6 +620,57 @@ export async function updateMatchResult(matchId, scoreA, scoreB, status, teamA =
         console.error('Error updating match results:', error);
         return { success: false, error: error.message };
     }
+    
+    // Persistent winner propagation in Supabase mode
+    try {
+        const { data: allMatches, error: fetchErr } = await supabase
+            .from('matches')
+            .select('*')
+            .order('kickoff', { ascending: true })
+            .order('id', { ascending: true });
+            
+        if (!fetchErr && allMatches) {
+            const matchesClone = JSON.parse(JSON.stringify(allMatches));
+            const hasChanges = propagateWinners(matchesClone);
+            
+            if (hasChanges) {
+                // Update match placeholders in DB
+                for (let i = 0; i < allMatches.length; i++) {
+                    const orig = allMatches[i];
+                    const updated = matchesClone[i];
+                    if (orig.team_a !== updated.team_a || orig.team_b !== updated.team_b) {
+                        await supabase
+                            .from('matches')
+                            .update({
+                                team_a: updated.team_a,
+                                team_b: updated.team_b
+                            })
+                            .eq('id', updated.id);
+                    }
+                }
+                
+                // Update champion prediction placeholders in DB
+                const { data: champPreds, error: cpErr } = await supabase
+                    .from('champion_predictions')
+                    .select('*');
+                    
+                if (!cpErr && champPreds) {
+                    for (const cp of champPreds) {
+                        const resolved = resolveTeamName(cp.predicted_team, matchesClone);
+                        if (resolved !== cp.predicted_team) {
+                            await supabase
+                                .from('champion_predictions')
+                                .update({ predicted_team: resolved })
+                                .eq('player_id', cp.player_id);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error propagating winners in database:', err);
+    }
+    
     return { success: true };
 }
 
